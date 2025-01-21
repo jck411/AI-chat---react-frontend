@@ -15,13 +15,8 @@ import {
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-// Removed remarkBreaks to ensure headings render properly
 import CodeBlock, { InlineCode } from './CodeBlock';
 
-/**
- * Custom hook that accepts a dependency value and scrolls the element
- * attached to the returned ref to its bottom every time the dependency changes.
- */
 function useChatScroll(dep) {
   const ref = useRef(null);
   useEffect(() => {
@@ -33,10 +28,7 @@ function useChatScroll(dep) {
 }
 
 const ChatInterface = () => {
-  // -------------------------
-  // State Variables
-  // -------------------------
-  const [messages, setMessages] = useState([]); // Start with an empty array
+  const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isStoppingGeneration, setIsStoppingGeneration] = useState(false);
   const [ttsEnabled, setTtsEnabled] = useState(true);
@@ -48,9 +40,6 @@ const ChatInterface = () => {
   const [wsConnectionStatus, setWsConnectionStatus] = useState('disconnected');
   const [darkMode, setDarkMode] = useState(true);
 
-  // -------------------------
-  // Refs
-  // -------------------------
   const websocketRef = useRef(null);
   const messagesRef = useRef(messages);
 
@@ -60,9 +49,6 @@ const ChatInterface = () => {
 
   const scrollRef = useChatScroll(messages);
 
-  // -------------------------
-  // Effects
-  // -------------------------
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add('dark');
@@ -71,7 +57,6 @@ const ChatInterface = () => {
     }
   }, [darkMode]);
 
-  // WebSocket setup on mount
   useEffect(() => {
     const ws = new WebSocket('ws://localhost:8000/ws/chat');
     websocketRef.current = ws;
@@ -96,7 +81,7 @@ const ChatInterface = () => {
           };
           setMessages((prev) => [...prev, sttMsg]);
 
-          // Now send that STT text back for GPT response
+          // Send STT text for GPT response
           setIsGenerating(true);
           websocketRef.current.send(
             JSON.stringify({
@@ -112,14 +97,15 @@ const ChatInterface = () => {
           console.log(`Received GPT content: ${content}`);
           setMessages((prev) => {
             const lastIndex = prev.length - 1;
-            // If the last message is from assistant, append content to it
             if (prev[lastIndex] && prev[lastIndex].sender === 'assistant') {
               return [
                 ...prev.slice(0, lastIndex),
-                { ...prev[lastIndex], text: prev[lastIndex].text + content },
+                {
+                  ...prev[lastIndex],
+                  text: prev[lastIndex].text + content,
+                },
               ];
             } else {
-              // Otherwise, create a new message
               return [
                 ...prev,
                 {
@@ -158,9 +144,6 @@ const ChatInterface = () => {
     };
   }, []);
 
-  // -------------------------
-  // Handlers
-  // -------------------------
   const handleStop = async () => {
     setIsStoppingGeneration(true);
     try {
@@ -242,14 +225,12 @@ const ChatInterface = () => {
       timestamp: new Date().toLocaleTimeString(),
     };
 
-    // Add the user's message
     setMessages((prev) => [...prev, newMessage]);
     setInputMessage('');
     setSttTranscript('');
 
     setIsGenerating(true);
     try {
-      // Insert a placeholder for the assistant message
       const aiMessageId = Date.now() + 1;
       setMessages((prev) => [
         ...prev,
@@ -277,15 +258,12 @@ const ChatInterface = () => {
     }
   };
 
-  // -------------------------
-  // Render
-  // -------------------------
   return (
     <div className="flex flex-col h-screen bg-gray-100 dark:bg-gray-900">
       {/* TOP BAR */}
       <div className="fixed top-0 left-0 right-0 z-10 bg-white/80 dark:bg-gray-800/80 shadow-sm p-4 flex justify-between items-center backdrop-blur-md">
         <h1 className="text-xl font-semibold text-gray-800 dark:text-gray-100">
-          {/* Title / Heading goes here if needed */}
+          {/* Title / Heading if needed */}
         </h1>
 
         <div className="flex items-center gap-4">
@@ -336,7 +314,9 @@ const ChatInterface = () => {
             className={`p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full flex items-center gap-2 transition-all duration-200 ${
               isTogglingTTS ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
             }`}
-            title={ttsEnabled ? 'Text-to-Speech Enabled' : 'Text-to-Speech Disabled'}
+            title={
+              ttsEnabled ? 'Text-to-Speech Enabled' : 'Text-to-Speech Disabled'
+            }
           >
             {isTogglingTTS ? (
               <Loader2 className="w-5 h-5 animate-spin text-gray-600 dark:text-gray-300" />
@@ -391,58 +371,68 @@ const ChatInterface = () => {
         </div>
       </div>
 
-      {/* MESSAGES AREA */}
+      {/* MESSAGES AREA 
+          The parent takes full width so the scrollbar is on screen edge.
+          Inside it, we center and limit max width to 1200px. 
+      */}
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto p-4 pt-20 space-y-4 scrollbar-thin scrollbar-track-gray-200 dark:scrollbar-track-gray-700 scrollbar-thumb-gray-400 dark:scrollbar-thumb-gray-500 hover:scrollbar-thumb-gray-500 dark:hover:scrollbar-thumb-gray-400"
+        className="flex-1 overflow-y-auto scrollbar-thin scrollbar-track-gray-200 dark:scrollbar-track-gray-700 scrollbar-thumb-gray-400 dark:scrollbar-thumb-gray-500 hover:scrollbar-thumb-gray-500 dark:hover:scrollbar-thumb-gray-400"
         style={{ scrollbarGutter: 'stable', scrollbarWidth: 'thin', msOverflowStyle: 'none' }}
       >
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={`flex ${
-              message.sender === 'user' ? 'justify-end' : 'justify-start'
-            }`}
-          >
+        <div className="max-w-[1000px] mx-auto p-4 pt-20 space-y-4">
+          {messages.map((message) => (
             <div
-              className={`max-w-[80%] rounded-lg p-4 shadow-sm ${
-                message.sender === 'user'
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100'
+              key={message.id}
+              className={`flex ${
+                message.sender === 'user' ? 'justify-end' : 'justify-start'
               }`}
             >
-              {message.sender === 'assistant' ? (
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  components={{
-                    code: ({ inline, className, children }) => {
-                      const match = /language-(\w+)/.exec(className || '');
-                      // Only use CodeBlock for triple backticks with language specification
-                      if (!inline && match) {
-                        return <CodeBlock className={className} children={children} />;
-                      }
-                      // Use InlineCode for all other cases (single backticks)
-                      return <InlineCode>{children}</InlineCode>;
-                    }
-                  }}
-                  className="prose dark:prose-invert max-w-none break-words"
-                >
-                  {message.text}
-                </ReactMarkdown>
-              ) : (
-                <div className="whitespace-pre-wrap break-words">{message.text}</div>
-              )}
-              {/* Timestamp */}
               <div
-                className={`text-xs mt-1 ${
-                  message.sender === 'user' ? 'text-blue-100' : 'text-gray-400'
+                className={`max-w-[80%] rounded-lg p-4 ${
+                  message.sender === 'user'
+                    ? 'bg-blue-500 text-white shadow-sm'
+                    : // Remove bubble background for assistant:
+                      'bg-transparent text-gray-800 dark:text-gray-100 shadow-none'
                 }`}
               >
-                {message.timestamp}
+                {message.sender === 'assistant' ? (
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      code: ({ inline, className, children }) => {
+                        const match = /language-(\w+)/.exec(className || '');
+                        if (!inline && match) {
+                          return (
+                            <CodeBlock className={className} children={children} />
+                          );
+                        }
+                        return <InlineCode>{children}</InlineCode>;
+                      },
+                    }}
+                    className="prose dark:prose-invert max-w-none break-words"
+                  >
+                    {message.text}
+                  </ReactMarkdown>
+                ) : (
+                  <div className="whitespace-pre-wrap break-words">
+                    {message.text}
+                  </div>
+                )}
+                {/* Timestamp */}
+                <div
+                  className={`text-xs mt-1 ${
+                    message.sender === 'user'
+                      ? 'text-blue-100'
+                      : 'text-gray-400'
+                  }`}
+                >
+                  {message.timestamp}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
       {/* INPUT + SEND (Footer) */}
@@ -456,7 +446,10 @@ const ChatInterface = () => {
               setSttTranscript('');
             }}
             onKeyPress={(e) => {
-              if (e.key === 'Enter' && (inputMessage.trim() || sttTranscript.trim())) {
+              if (
+                e.key === 'Enter' &&
+                (inputMessage.trim() || sttTranscript.trim())
+              ) {
                 handleSend(sttTranscript || inputMessage);
               }
             }}
