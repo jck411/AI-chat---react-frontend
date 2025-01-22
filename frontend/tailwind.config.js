@@ -1,58 +1,45 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
-    "./src/**/*.{js,jsx,ts,tsx}",
+    './src/**/*.{js,jsx,ts,tsx}',
   ],
-  darkMode: "class",
+  darkMode: 'class',
   theme: {
     extend: {
       typography: {
         DEFAULT: {
           css: {
-            color: '#333',
-            h1: {
-              fontSize: '2.5rem',
-              fontWeight: '700',
+            pre: {
+              margin: '0', // No margin outside the code block
+              padding: '0', // No padding inside the pre tag
+              border: '1px solid #d1d5db', // Single light border for the block
+              borderRadius: '0.375rem', // Smooth rounded corners
+              backgroundColor: '#f9fafb', // Light mode background
+              color: '#111827', // Text color in light mode
             },
-            // Inline code styling for light mode
-            ':not(pre) > code': {
-              color: '#F78C6C',
-              backgroundColor: '#2D2D2D',
-              padding: '0.2rem 0.4rem',
-              borderRadius: '4px',
-              display: 'inline',
+            code: {
+              color: 'inherit', // Inherit text color
+              backgroundColor: 'transparent', // No background behind the text
+              borderRadius: '0', // Remove any inline code rounding
+              padding: '0', // Remove inline code padding
             },
-            'code::before': { content: 'none' },
-            'code::after': { content: 'none' },
           },
         },
         invert: {
           css: {
-            color: '#E0E0E0',
-            h1: { color: '#FFFFFF' },
-            h2: { color: '#FFFFFF' },
-            h3: { color: '#FFFFFF' },
-            a: {
-              color: '#82AAFF',
-              textDecoration: 'underline',
-              '&:hover': {
-                color: '#5995E5',
-              },
+            pre: {
+              margin: '0', // No margin outside the code block
+              padding: '0', // No padding inside the pre tag
+              border: '1px solid #4b5563', // Single dark border for the block
+              borderRadius: '0.375rem', // Smooth rounded corners
+              backgroundColor: '#1e1e1e', // Dark mode background
+              color: '#e5e7eb', // Text color in dark mode
             },
-            strong: { color: '#FFFFFF' },
-            em: { color: '#E0E0E0' },
-            ':not(pre) > code': {
-              color: '#F78C6C',
-              backgroundColor: '#2D2D2D',
-              padding: '0.2rem 0.4rem',
-              borderRadius: '4px',
-              display: 'inline',
-            },
-            'code::before': { content: 'none' },
-            'code::after': { content: 'none' },
-            blockquote: {
-              color: '#B0BEC5',
-              borderLeftColor: '#546E7A',
+            code: {
+              color: 'inherit', // Inherit text color
+              backgroundColor: 'transparent', // No background behind the text
+              borderRadius: '0', // Remove any inline code rounding
+              padding: '0', // Remove inline code padding
             },
           },
         },

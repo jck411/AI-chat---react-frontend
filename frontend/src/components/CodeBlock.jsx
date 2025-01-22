@@ -6,16 +6,16 @@ import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
  * Component for rendering inline content from single backticks as plain text
  */
 export const InlineCode = ({ children }) => {
-  // Check if the content looks like a URL
-  const isUrl = children && typeof children === 'string' && (
-    children.startsWith('http://') || 
-    children.startsWith('https://') || 
-    children.startsWith('www.')
-  );
+  const isUrl =
+    children &&
+    typeof children === 'string' &&
+    (children.startsWith('http://') ||
+      children.startsWith('https://') ||
+      children.startsWith('www.'));
 
   if (isUrl) {
     return (
-      <a 
+      <a
         href={children.startsWith('www.') ? `https://${children}` : children}
         target="_blank"
         rel="noopener noreferrer"
@@ -26,15 +26,12 @@ export const InlineCode = ({ children }) => {
     );
   }
 
-  return (
-    <code className="px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-gray-700 text-sm font-mono">
-      {children}
-    </code>
-  );
+  return <code>{children}</code>;
 };
 
 /**
  * Component for rendering code blocks (triple backticks) with syntax highlighting
+ * and a header containing the copy button.
  */
 const CodeBlockWrapper = ({ language, children }) => {
   const [copied, setCopied] = useState(false);
@@ -42,38 +39,42 @@ const CodeBlockWrapper = ({ language, children }) => {
 
   const handleCopy = () => {
     if (codeRef.current) {
-      navigator.clipboard
-        .writeText(codeRef.current.textContent)
-        .then(() => {
-          setCopied(true);
-          setTimeout(() => setCopied(false), 2000);
-        });
+      navigator.clipboard.writeText(codeRef.current.textContent).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      });
     }
   };
 
   return (
-    <div className="relative my-4 rounded-lg overflow-hidden">
-      <button
-        onClick={handleCopy}
-        className="absolute top-2 right-2 bg-gray-700 text-white px-2 py-1 text-sm rounded hover:bg-gray-600 transition-colors"
-        aria-label="Copy code"
-      >
-        {copied ? '✓ Copied' : 'Copy'}
-      </button>
-      
-      <div ref={codeRef} className="[&_pre]:!m-0 [&_pre]:!p-4 [&_code]:!p-0">
+    <div className="border border-gray-400 dark:border-gray-600 rounded overflow-hidden">
+      {/* Unified Header with Language Label and Copy Button */}
+      <div className="flex items-center justify-between bg-gray-300 dark:bg-gray-700 px-3 py-2">
+        <span className="text-xs font-medium text-gray-700 dark:text-gray-300 uppercase">
+          {language || 'Code'}
+        </span>
+        <button
+          onClick={handleCopy}
+          className="text-xs bg-gray-700 text-white px-2 py-1 rounded hover:bg-gray-600 transition-colors"
+          aria-label="Copy code"
+        >
+          {copied ? '✓ Copied' : 'Copy'}
+        </button>
+      </div>
+
+      <div ref={codeRef}>
         <SyntaxHighlighter
           language={language}
           style={oneDark}
           customStyle={{
-            margin: 0,
-            borderRadius: '0.5rem',
+            margin: 0, // No margin around the block
+            padding: '1rem', // Padding inside the block
+            backgroundColor: 'transparent',
           }}
           codeTagProps={{
             style: {
               lineHeight: 'inherit',
-              backgroundColor: 'transparent'
-            }
+            },
           }}
           showLineNumbers={false}
           wrapLines={false}

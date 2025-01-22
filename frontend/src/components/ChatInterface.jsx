@@ -404,18 +404,22 @@ const ChatInterface = () => {
                         const match = /language-(\w+)/.exec(className || '');
                         if (!inline && match) {
                           return (
-                            <CodeBlock className={className} children={children} />
+                            <CodeBlock className={className}>
+                              {children}
+                            </CodeBlock>
                           );
                         }
                         return <InlineCode>{children}</InlineCode>;
                       },
                       a: ({ node, ...props }) => (
                         <a 
-                          {...props} 
-                          target="_blank" 
+                          {...props}
+                          target="_blank"
                           rel="noopener noreferrer"
                           className="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 underline"
-                        />
+                        >
+                          {props.children}
+                        </a>
                       )
                     }}
                     className="prose dark:prose-invert max-w-none break-words"
