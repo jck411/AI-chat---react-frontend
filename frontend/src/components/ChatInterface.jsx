@@ -409,6 +409,14 @@ const ChatInterface = () => {
                         }
                         return <InlineCode>{children}</InlineCode>;
                       },
+                      a: ({ node, ...props }) => (
+                        <a 
+                          {...props} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 underline"
+                        />
+                      )
                     }}
                     className="prose dark:prose-invert max-w-none break-words"
                   >
