@@ -42,12 +42,27 @@ const ChatInterface = () => {
 
   const websocketRef = useRef(null);
   const messagesRef = useRef(messages);
+  const textareaRef = useRef(null);
 
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
 
   const scrollRef = useChatScroll(messages);
+
+  // Function to adjust textarea height
+  const adjustTextareaHeight = () => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto';
+      textarea.style.height = `${textarea.scrollHeight}px`;
+    }
+  };
+
+  // Update textarea height whenever input changes
+  useEffect(() => {
+    adjustTextareaHeight();
+  }, [inputMessage, sttTranscript]);
 
   useEffect(() => {
     if (darkMode) {
@@ -215,6 +230,21 @@ const ChatInterface = () => {
     }
   };
 
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      if (e.shiftKey) {
+        // Allow newline when Shift+Enter is pressed
+        return;
+      } else {
+        // Submit on Enter without shift
+        e.preventDefault();
+        if (inputMessage.trim() || sttTranscript.trim()) {
+          handleSend(sttTranscript || inputMessage);
+        }
+      }
+    }
+  };
+
   const handleSend = async (userInput) => {
     if (!userInput.trim()) return;
 
@@ -371,10 +401,7 @@ const ChatInterface = () => {
         </div>
       </div>
 
-      {/* MESSAGES AREA 
-          The parent takes full width so the scrollbar is on screen edge.
-          Inside it, we center and limit max width to 1200px. 
-      */}
+      {/* MESSAGES AREA */}
       <div
         ref={scrollRef}
         className="flex-1 overflow-y-auto scrollbar-thin scrollbar-track-gray-200 dark:scrollbar-track-gray-700 scrollbar-thumb-gray-400 dark:scrollbar-thumb-gray-500 hover:scrollbar-thumb-gray-500 dark:hover:scrollbar-thumb-gray-400"
@@ -392,8 +419,7 @@ const ChatInterface = () => {
                 className={`max-w-[80%] rounded-lg p-4 ${
                   message.sender === 'user'
                     ? 'bg-blue-500 text-white shadow-sm'
-                    : // Remove bubble background for assistant:
-                      'bg-transparent text-gray-800 dark:text-gray-100 shadow-none'
+                    : 'bg-transparent text-gray-800 dark:text-gray-100 shadow-none'
                 }`}
               >
                 {message.sender === 'assistant' ? (
@@ -449,29 +475,23 @@ const ChatInterface = () => {
 
       {/* INPUT + SEND (Footer) */}
       <div className="bg-white dark:bg-gray-800 p-4">
-        <div className="flex items-center gap-4 max-w-4xl mx-auto">
-          <input
-            type="text"
+        <div className="flex items-start gap-4 max-w-4xl mx-auto">
+          <textarea
+            ref={textareaRef}
+            rows={1}
             value={sttTranscript || inputMessage}
             onChange={(e) => {
               setInputMessage(e.target.value);
               setSttTranscript('');
             }}
-            onKeyPress={(e) => {
-              if (
-                e.key === 'Enter' &&
-                (inputMessage.trim() || sttTranscript.trim())
-              ) {
-                handleSend(sttTranscript || inputMessage);
-              }
-            }}
+            onKeyDown={handleKeyDown}
             placeholder="Type or speak your message..."
-            className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
+            className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 resize-none min-h-[40px] max-h-[200px] overflow-hidden scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600"
           />
           <button
             onClick={() => handleSend(sttTranscript || inputMessage)}
             disabled={isGenerating}
-            className={`p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 ${
+            className={`p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors ${
               isGenerating ? 'opacity-50 cursor-not-allowed' : ''
             }`}
           >
@@ -488,3 +508,4 @@ const ChatInterface = () => {
 };
 
 export default ChatInterface;
+
