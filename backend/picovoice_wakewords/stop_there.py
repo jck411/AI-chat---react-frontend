@@ -1,13 +1,23 @@
 import pvporcupine
 import pyaudio
 import struct
+from dotenv import load_dotenv
+import os
 
 def main():
+    # Load environment variables
+    load_dotenv()
+
+    # Retrieve the access key from the .env file
+    access_key = os.getenv("PORCUPINE_ACCESS_KEY")
+    if not access_key:
+        raise ValueError("Access key not found. Ensure it's defined in the .env file.")
+
     # Path to your wake word file
-    keyword_path = "/home/jack/AI-chat---react-frontend/backend/picovoice_wakewords/stop-there_en_linux_v3_0_0/stop-there_en_linux_v3_0_0.ppn"
+    keyword_path = "/home/jack/ayyaihome/backend/picovoice_wakewords/stop-there_en_linux_v3_0_0/stop-there_en_linux_v3_0_0.ppn"
 
     # Initialize Porcupine
-    porcupine = pvporcupine.create(access_key="N+YAYNt5aUoV1rlAQ8o9QN5qY8qOGtjW578y6GNCHqEW7LghT4HyKQ==", keyword_paths=[keyword_path])
+    porcupine = pvporcupine.create(access_key=access_key, keyword_paths=[keyword_path])
 
     # Set up audio stream
     pa = pyaudio.PyAudio()

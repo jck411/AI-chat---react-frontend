@@ -1,13 +1,12 @@
-
 import os
 import json
 import asyncio
 import signal
 import threading
+import requests  # <-- for wake-word triggered HTTP requests
 import openai
 import inspect
 import re
-import requests
 from datetime import datetime
 from queue import Queue
 from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Sequence, Tuple, Union
@@ -22,6 +21,10 @@ from timezonefinder import TimezoneFinder
 from fastapi import FastAPI, HTTPException, APIRouter, WebSocket, WebSocketDisconnect, Request, Response, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+
+# =============== NEW IMPORTS FOR WAKE WORD ===============
+import pvporcupine
+import struct
 
 # =====================================================================================
 # Global CONFIG
@@ -49,7 +52,6 @@ CONFIG = {
     "PROCESSING_PIPELINE": {
         "USE_SEGMENTATION": True,
         "DELIMITERS": ["\n", ". ", "? ", "! ", "* "],
-        "NLP_MODULE": "none",
         "CHARACTER_MAXIMUM": 50,
     },
     "TTS_MODELS": {
@@ -208,12 +210,6 @@ def shutdown():
     audio_player.stop_stream()
     PyAudioSingleton.terminate()
     print("Shutdown complete.")
-
-# (Optional) If you prefer to rely on the atexit mechanism, you can leave this in.
-# But in many cases the @app.on_event("shutdown") hook is enough.
-
-
-# NOTE: Removed custom signal.signal(...) calls so that uvicorn can properly handle Ctrl+C.
 
 
 # =========== Azure STT Class ===========
@@ -932,11 +928,77 @@ def shutdown_event():
 # =========== Include Routers & Run ===========
 app.include_router(router)
 
+
+# ============== BACKGROUND WAKE WORD THREAD ==============
+def listen_for_wake_word():
+    """
+    Continuously listens for the 'stop there' wake word using Porcupine.
+    When detected, it will call /api/stop-tts and /api/stop-generation via requests.
+    """
+    print("[WakeWord Thread] Starting wake word detection...")
+
+    # Load .env to get the Porcupine Access Key
+    load_dotenv()
+    access_key = os.getenv("PORCUPINE_ACCESS_KEY")
+    if not access_key:
+        raise ValueError("PORCUPINE_ACCESS_KEY not found in .env file.")
+
+    # Path to your PPNS for "stop there"
+    keyword_path = "/home/jack/ayyaihome/backend/picovoice_wakewords/stop-there_en_linux_v3_0_0/stop-there_en_linux_v3_0_0.ppn"
+
+    porcupine = pvporcupine.create(
+        access_key=access_key,
+        keyword_paths=[keyword_path]
+    )
+
+    pa = pyaudio.PyAudio()
+    audio_stream = pa.open(
+        rate=porcupine.sample_rate,
+        channels=1,
+        format=pyaudio.paInt16,
+        input=True,
+        frames_per_buffer=porcupine.frame_length
+    )
+
+    try:
+        while True:
+            pcm = audio_stream.read(porcupine.frame_length, exception_on_overflow=False)
+            pcm = struct.unpack_from("h" * porcupine.frame_length, pcm)
+
+            keyword_index = porcupine.process(pcm)
+            if keyword_index >= 0:
+                print("[WakeWord Thread] Detected 'stop there'!")
+                # Call your endpoints to stop TTS + generation
+                try:
+                    requests.post("http://localhost:8000/api/stop-tts")
+                    requests.post("http://localhost:8000/api/stop-generation")
+                except Exception as e:
+                    print(f"[WakeWord Thread] Error hitting stop endpoints: {e}")
+
+    except KeyboardInterrupt:
+        print("[WakeWord Thread] Stopping on KeyboardInterrupt.")
+    finally:
+        audio_stream.close()
+        pa.terminate()
+        porcupine.delete()
+        print("[WakeWord Thread] Exiting.")
+
+
+@app.on_event("startup")
+def start_wake_word_thread():
+    """
+    Spawns a daemon thread for continuous wake word detection.
+    """
+    thread = threading.Thread(target=listen_for_wake_word, daemon=True)
+    thread.start()
+    print("[Startup] Wake word detection thread started.")
+
+
 if __name__ == '__main__':
     # Let uvicorn handle Ctrl+C and signals cleanly.
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
         port=8000,
-        reload=True  # Set to True if you want auto-reload in dev
+        reload=True  # Set to True if you want auto-reload in development
     )
