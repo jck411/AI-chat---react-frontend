@@ -295,6 +295,19 @@ const ChatInterface = () => {
     }
   };
 
+  const handleClearChat = async () => {
+    try {
+      if (isGenerating) {
+        await handleStop();
+      }
+      setMessages([]);
+      setInputMessage('');
+      setSttTranscript('');
+    } catch (error) {
+      console.error('Error clearing chat:', error);
+    }
+  };
+
   /**
    * --- react-window row measurement + rendering ---
    */
@@ -442,6 +455,15 @@ const ChatInterface = () => {
               {wsConnectionStatus}
             </span>
           </div>
+
+          {/* Add Clear Chat Button here */}
+          <button
+            onClick={handleClearChat}
+            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full flex items-center gap-2 transition-all duration-200"
+            title="Clear Chat"
+          >
+            <X className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+          </button>
 
           {/* Stop Button */}
           {isGenerating && (
