@@ -790,6 +790,18 @@ router = APIRouter()
 async def openai_options():
     return Response(status_code=200)
 
+# ---- Wakeword start stt Endpoint ----
+@app.post("/api/start-stt")
+async def start_stt_endpoint():
+    """
+    If STT is currently paused, this starts listening again.
+    Otherwise it does nothing.
+    """
+    if not stt_instance.is_listening:
+        stt_instance.start_listening()
+    return {"detail": "STT is now ON."}
+
+
 
 # ---- Audio Playback Toggle Endpoint ----
 @app.post("/api/toggle-audio")
@@ -930,25 +942,27 @@ app.include_router(router)
 
 
 # ============== BACKGROUND WAKE WORD THREAD ==============
-def listen_for_wake_word():
-    """
-    Continuously listens for the 'stop there' wake word using Porcupine.
-    When detected, it will call /api/stop-tts and /api/stop-generation via requests.
-    """
-    print("[WakeWord Thread] Starting wake word detection...")
 
-    # Load .env to get the Porcupine Access Key
+def listen_for_wake_words():
+    """
+    Continuously listens for multiple Porcupine keywords.
+    Index 0 -> 'stop-there'
+    Index 1 -> 'computer'
+    """
+    print("[WakeWord Thread] Starting multi-keyword detection...")
+
     load_dotenv()
     access_key = os.getenv("PORCUPINE_ACCESS_KEY")
     if not access_key:
         raise ValueError("PORCUPINE_ACCESS_KEY not found in .env file.")
 
-    # Path to your PPNS for "stop there"
-    keyword_path = "/home/jack/ayyaihome/backend/picovoice_wakewords/stop-there_en_linux_v3_0_0/stop-there_en_linux_v3_0_0.ppn"
+    # Paths to your two .ppn files
+    stop_there_path = "/home/jack/ayyaihome/backend/picovoice_wakewords/stop-there_en_linux_v3_0_0/stop-there_en_linux_v3_0_0.ppn"
+    computer_path   = "/home/jack/ayyaihome/backend/picovoice_wakewords/computer_en_linux_v3_0_0/computer_en_linux_v3_0_0.ppn"
 
     porcupine = pvporcupine.create(
         access_key=access_key,
-        keyword_paths=[keyword_path]
+        keyword_paths=[stop_there_path, computer_path]
     )
 
     pa = pyaudio.PyAudio()
@@ -966,14 +980,23 @@ def listen_for_wake_word():
             pcm = struct.unpack_from("h" * porcupine.frame_length, pcm)
 
             keyword_index = porcupine.process(pcm)
-            if keyword_index >= 0:
-                print("[WakeWord Thread] Detected 'stop there'!")
-                # Call your endpoints to stop TTS + generation
+            # If no keyword is detected, keyword_index will be -1
+            if keyword_index == 0:
+                # "stop there" was detected
+                print("[WakeWord Thread] Detected 'stop there' -> stopping TTS and generation.")
                 try:
                     requests.post("http://localhost:8000/api/stop-tts")
                     requests.post("http://localhost:8000/api/stop-generation")
                 except Exception as e:
-                    print(f"[WakeWord Thread] Error hitting stop endpoints: {e}")
+                    print(f"[WakeWord Thread] Error calling stop endpoints: {e}")
+
+            elif keyword_index == 1:
+                # "computer" was detected
+                print("[WakeWord Thread] Detected 'computer' -> starting STT if paused.")
+                try:
+                    requests.post("http://localhost:8000/api/start-stt")
+                except Exception as e:
+                    print(f"[WakeWord Thread] Error calling start-stt endpoint: {e}")
 
     except KeyboardInterrupt:
         print("[WakeWord Thread] Stopping on KeyboardInterrupt.")
@@ -987,9 +1010,18 @@ def listen_for_wake_word():
 @app.on_event("startup")
 def start_wake_word_thread():
     """
+    Spawns a daemon thread that listens for wake words continuously.
+    """
+    thread = threading.Thread(target=listen_for_wake_words, daemon=True)
+    thread.start()
+    print("[Startup] Multi-keyword wake word thread started.")
+
+@app.on_event("startup")
+def start_wake_word_thread():
+    """
     Spawns a daemon thread for continuous wake word detection.
     """
-    thread = threading.Thread(target=listen_for_wake_word, daemon=True)
+    thread = threading.Thread(target=listen_for_wake_words, daemon=True)
     thread.start()
     print("[Startup] Wake word detection thread started.")
 
