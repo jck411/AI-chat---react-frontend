@@ -1,15 +1,16 @@
+
 import os
 import json
 import asyncio
 import signal
 import threading
-import requests  
 import openai
 import inspect
 import re
+import requests
 from datetime import datetime
 from queue import Queue
-from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Sequence, Tuple, Union, Set
+from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import uvicorn
 import pyaudio
@@ -21,9 +22,6 @@ from timezonefinder import TimezoneFinder
 from fastapi import FastAPI, HTTPException, APIRouter, WebSocket, WebSocketDisconnect, Request, Response, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-
-import pvporcupine
-import struct
 
 # =====================================================================================
 # Global CONFIG
@@ -51,6 +49,7 @@ CONFIG = {
     "PROCESSING_PIPELINE": {
         "USE_SEGMENTATION": True,
         "DELIMITERS": ["\n", ". ", "? ", "! ", "* "],
+        "NLP_MODULE": "none",
         "CHARACTER_MAXIMUM": 50,
     },
     "TTS_MODELS": {
@@ -199,28 +198,6 @@ audio_player = AudioPlayer(pyaudio_instance)
 TTS_STOP_EVENT = asyncio.Event()
 GEN_STOP_EVENT = asyncio.Event()
 
-# =========== WebSocket Connections ===========
-from fastapi import WebSocket
-
-connected_websockets: Set[WebSocket] = set()
-
-# ------------ Broadcast Helper ------------
-async def broadcast_stt_state():
-    """
-    Sends {"is_listening": <True or False>} to every connected WebSocket client.
-    """
-    message = {"is_listening": stt_instance.is_listening}
-    living_sockets = []
-    for ws in list(connected_websockets):
-        try:
-            await ws.send_json(message)
-            living_sockets.append(ws)
-        except:
-            # If send fails, socket is probably closed
-            pass
-    # Keep only the alive sockets
-    connected_websockets.clear()
-    connected_websockets.update(living_sockets)
 
 # ------------ Shutdown Handler ------------
 def shutdown():
@@ -231,6 +208,12 @@ def shutdown():
     audio_player.stop_stream()
     PyAudioSingleton.terminate()
     print("Shutdown complete.")
+
+# (Optional) If you prefer to rely on the atexit mechanism, you can leave this in.
+# But in many cases the @app.on_event("shutdown") hook is enough.
+
+
+# NOTE: Removed custom signal.signal(...) calls so that uvicorn can properly handle Ctrl+C.
 
 
 # =========== Azure STT Class ===========
@@ -283,6 +266,7 @@ class ContinuousSpeechRecognizer:
 
 
 stt_instance = ContinuousSpeechRecognizer()
+
 
 # =========== Tools & Function Calls ===========
 def check_args(function: Callable, args: dict) -> bool:
@@ -374,6 +358,7 @@ def get_available_functions():
         "get_time": get_time
     }
 
+
 # =========== Audio Player & TTS ===========
 def audio_player_sync(audio_queue: asyncio.Queue, loop: asyncio.AbstractEventLoop, stop_event: asyncio.Event):
     """
@@ -407,6 +392,7 @@ def audio_player_sync(audio_queue: asyncio.Queue, loop: asyncio.AbstractEventLoo
 async def start_audio_player_async(audio_queue: asyncio.Queue, loop: asyncio.AbstractEventLoop, stop_event: asyncio.Event):
     await asyncio.to_thread(audio_player_sync, audio_queue, loop, stop_event)
 
+
 class PushAudioOutputStreamCallback(speechsdk.audio.PushAudioOutputStreamCallback):
     def __init__(self, audio_queue: asyncio.Queue, stop_event: asyncio.Event):
         super().__init__()
@@ -422,6 +408,7 @@ class PushAudioOutputStreamCallback(speechsdk.audio.PushAudioOutputStreamCallbac
 
     def close(self):
         self.loop.call_soon_threadsafe(self.audio_queue.put_nowait, None)
+
 
 def create_ssml(phrase: str, voice: str, prosody: dict) -> str:
     return f"""
@@ -488,6 +475,7 @@ async def azure_text_to_speech_processor(phrase_queue: asyncio.Queue,
         conditional_print(f"Azure TTS config error: {e}", "default")
         await audio_queue.put(None)
 
+
 async def openai_text_to_speech_processor(phrase_queue: asyncio.Queue,
                                           audio_queue: asyncio.Queue,
                                           stop_event: asyncio.Event,
@@ -553,6 +541,7 @@ async def openai_text_to_speech_processor(phrase_queue: asyncio.Queue,
         conditional_print(f"OpenAI TTS general error: {e}", "default")
         await audio_queue.put(None)
 
+
 async def process_streams(phrase_queue: asyncio.Queue, audio_queue: asyncio.Queue, stop_event: asyncio.Event):
     """
     Orchestrates TTS tasks + audio playback, with an external stop_event.
@@ -589,13 +578,11 @@ async def process_streams(phrase_queue: asyncio.Queue, audio_queue: asyncio.Queu
 
         stt_instance.start_listening()
         conditional_print("STT resumed after completing TTS.", "segment")
-        # Broadcast the resumed state
-        await broadcast_stt_state()
 
     except Exception as e:
         conditional_print(f"Error in process_streams: {e}", "default")
         stt_instance.start_listening()
-        await broadcast_stt_state()
+
 
 # =========== Streaming Chat Logic ===========
 def extract_content_from_openai_chunk(chunk: Any) -> Optional[str]:
@@ -791,6 +778,7 @@ async def stream_openai_completion(messages: Sequence[Dict[str, Union[str, Any]]
         await chunk_queue.put(None)
         raise HTTPException(status_code=500, detail=f"OpenAI API error: {e}")
 
+
 # =========== FastAPI Setup ===========
 app = FastAPI()
 app.add_middleware(
@@ -806,29 +794,6 @@ router = APIRouter()
 async def openai_options():
     return Response(status_code=200)
 
-# ---- Wakeword start stt Endpoint ----
-@app.post("/api/start-stt")
-async def start_stt_endpoint():
-    """
-    If STT is currently paused, this starts listening again.
-    Otherwise it does nothing.
-    """
-    if not stt_instance.is_listening:
-        stt_instance.start_listening()
-        await broadcast_stt_state()
-    return {"detail": "STT is now ON."}
-
-# ---- Pause stt Endpoint ----
-@app.post("/api/pause-stt")
-async def pause_stt_endpoint():
-    """
-    If STT is currently listening, this pauses it.
-    Otherwise it does nothing.
-    """
-    if stt_instance.is_listening:
-        stt_instance.pause_listening()
-        await broadcast_stt_state()
-    return {"detail": "STT is now OFF."}
 
 # ---- Audio Playback Toggle Endpoint ----
 @app.post("/api/toggle-audio")
@@ -843,16 +808,17 @@ async def toggle_audio_playback():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to toggle audio playback: {str(e)}")
 
+
 # ---- TTS Toggle Endpoint ----
 @app.post("/api/toggle-tts")
 async def toggle_tts():
     try:
         current_status = CONFIG["GENERAL_TTS"]["TTS_ENABLED"]
         CONFIG["GENERAL_TTS"]["TTS_ENABLED"] = not current_status
-        await broadcast_stt_state()  # Optional: If TTS state affects is_listening
         return {"tts_enabled": CONFIG["GENERAL_TTS"]["TTS_ENABLED"]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to toggle TTS: {str(e)}")
+
 
 # ---- Stop TTS Endpoint ----
 @app.post("/api/stop-tts")
@@ -864,6 +830,7 @@ async def stop_tts():
     TTS_STOP_EVENT.set()
     return {"detail": "TTS stop event triggered. Ongoing TTS tasks should exit soon."}
 
+
 # ---- Stop Text Generation Endpoint ----
 @app.post("/api/stop-generation")
 async def stop_generation():
@@ -873,6 +840,7 @@ async def stop_generation():
     """
     GEN_STOP_EVENT.set()
     return {"detail": "Generation stop event triggered. Ongoing text generation will exit soon."}
+
 
 # ---- Unified WebSocket Endpoint ----
 async def stream_stt_to_client(websocket: WebSocket):
@@ -886,7 +854,6 @@ async def stream_stt_to_client(websocket: WebSocket):
 async def unified_chat_websocket(websocket: WebSocket):
     await websocket.accept()
     print("Client connected to /ws/chat")
-    connected_websockets.add(websocket)
 
     # Start a background task that streams recognized STT text
     stt_task = asyncio.create_task(stream_stt_to_client(websocket))
@@ -898,11 +865,11 @@ async def unified_chat_websocket(websocket: WebSocket):
 
             if action == "start-stt":
                 stt_instance.start_listening()
-                await broadcast_stt_state()
+                await websocket.send_json({"is_listening": True})
 
             elif action == "pause-stt":
                 stt_instance.pause_listening()
-                await broadcast_stt_state()
+                await websocket.send_json({"is_listening": False})
 
             elif action == "chat":
                 # Clear any old stop events
@@ -916,7 +883,7 @@ async def unified_chat_websocket(websocket: WebSocket):
                 audio_queue = asyncio.Queue()
 
                 stt_instance.pause_listening()
-                await broadcast_stt_state()
+                await websocket.send_json({"stt_paused": True})
                 conditional_print("STT paused before processing chat.", "segment")
 
                 # Launch TTS and audio processing
@@ -938,7 +905,7 @@ async def unified_chat_websocket(websocket: WebSocket):
 
                     # Resume STT after TTS
                     stt_instance.start_listening()
-                    await broadcast_stt_state()
+                    await websocket.send_json({"stt_resumed": True})
                     conditional_print("STT resumed after processing chat.", "segment")
 
     except WebSocketDisconnect:
@@ -947,11 +914,10 @@ async def unified_chat_websocket(websocket: WebSocket):
         print(f"WebSocket error in unified_chat_websocket: {e}")
     finally:
         stt_task.cancel()
-        connected_websockets.discard(websocket)
         stt_instance.pause_listening()
-        await broadcast_stt_state()
         await websocket.send_json({"is_listening": False})
         await websocket.close()
+
 
 # =========== Use FastAPI's built-in shutdown event ===========
 @app.on_event("shutdown")
@@ -962,83 +928,9 @@ def shutdown_event():
     """
     shutdown()
 
+
 # =========== Include Routers & Run ===========
 app.include_router(router)
-
-# ============== BACKGROUND WAKE WORD THREAD ==============
-
-def listen_for_wake_words():
-    """
-    Continuously listens for multiple Porcupine keywords.
-    Index 0 -> 'stop-there'
-    Index 1 -> 'computer'
-    """
-    print("[WakeWord Thread] Starting multi-keyword detection...")
-
-    load_dotenv()
-    access_key = os.getenv("PORCUPINE_ACCESS_KEY")
-    if not access_key:
-        raise ValueError("PORCUPINE_ACCESS_KEY not found in .env file.")
-
-    # Paths to your two .ppn files
-    stop_there_path = "/home/jack/ayyaihome/backend/picovoice_wakewords/stop-there_en_linux_v3_0_0/stop-there_en_linux_v3_0_0.ppn"
-    computer_path   = "/home/jack/ayyaihome/backend/picovoice_wakewords/computer_en_linux_v3_0_0/computer_en_linux_v3_0_0.ppn"
-
-    porcupine = pvporcupine.create(
-        access_key=access_key,
-        keyword_paths=[stop_there_path, computer_path]
-    )
-
-    pa = pyaudio.PyAudio()
-    audio_stream = pa.open(
-        rate=porcupine.sample_rate,
-        channels=1,
-        format=pyaudio.paInt16,
-        input=True,
-        frames_per_buffer=porcupine.frame_length
-    )
-
-    try:
-        while True:
-            pcm = audio_stream.read(porcupine.frame_length, exception_on_overflow=False)
-            pcm = struct.unpack_from("h" * porcupine.frame_length, pcm)
-
-            keyword_index = porcupine.process(pcm)
-            # If no keyword is detected, keyword_index will be -1
-            if keyword_index == 0:
-                # "stop there" was detected
-                print("[WakeWord Thread] Detected 'stop there' -> stopping TTS and generation.")
-                try:
-                    requests.post("http://localhost:8000/api/stop-tts")
-                    requests.post("http://localhost:8000/api/stop-generation")
-                except Exception as e:
-                    print(f"[WakeWord Thread] Error calling stop endpoints: {e}")
-
-            elif keyword_index == 1:
-                # "computer" was detected
-                print("[WakeWord Thread] Detected 'computer' -> starting STT if paused.")
-                try:
-                    requests.post("http://localhost:8000/api/start-stt")
-                except Exception as e:
-                    print(f"[WakeWord Thread] Error calling start-stt endpoint: {e}")
-
-    except KeyboardInterrupt:
-        print("[WakeWord Thread] Stopping on KeyboardInterrupt.")
-    finally:
-        audio_stream.close()
-        pa.terminate()
-        porcupine.delete()
-        print("[WakeWord Thread] Exiting.")
-
-# =========== Startup Event ===========
-@app.on_event("startup")
-def start_wake_word_thread():
-    """
-    Spawns a daemon thread that listens for wake words continuously.
-    """
-    thread = threading.Thread(target=listen_for_wake_words, daemon=True)
-    thread.start()
-    print("[Startup] Wake word detection thread started.")
 
 if __name__ == '__main__':
     # Let uvicorn handle Ctrl+C and signals cleanly.
@@ -1046,5 +938,5 @@ if __name__ == '__main__':
         "main:app",
         host="0.0.0.0",
         port=8000,
-        reload=True  # Set to True if you want auto-reload in development
+        reload=True  # Set to True if you want auto-reload in dev
     )
