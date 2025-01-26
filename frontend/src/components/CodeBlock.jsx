@@ -1,54 +1,38 @@
-import React, { useState, useRef } from 'react';
+// CodeBlock.js
+import React, { useState } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
-/**
- * Component for rendering inline content from single backticks as plain text
- */
 export const InlineCode = ({ children }) => {
-  const isUrl =
-    children &&
-    typeof children === 'string' &&
-    (children.startsWith('http://') ||
-      children.startsWith('https://') ||
-      children.startsWith('www.'));
+  const isUrl = typeof children === 'string' && /^(https?:\/\/|www\.)/.test(children);
 
-  if (isUrl) {
-    return (
-      <a
-        href={children.startsWith('www.') ? `https://${children}` : children}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 underline"
-      >
-        {children}
-      </a>
-    );
-  }
-
-  return <code>{children}</code>;
+  return isUrl ? (
+    <a
+      href={children.startsWith('www.') ? `https://${children}` : children}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 underline"
+    >
+      {children}
+    </a>
+  ) : (
+    <code>{children}</code>
+  );
 };
 
-/**
- * Component for rendering code blocks (triple backticks) with syntax highlighting
- * and a header containing the copy button.
- */
 const CodeBlockWrapper = ({ language, children }) => {
   const [copied, setCopied] = useState(false);
-  const codeRef = useRef(null);
+  const codeContent = String(children).trim();
 
   const handleCopy = () => {
-    if (codeRef.current) {
-      navigator.clipboard.writeText(codeRef.current.textContent).then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      });
-    }
+    navigator.clipboard.writeText(codeContent).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
   };
 
   return (
     <div className="border border-gray-400 dark:border-gray-600 rounded overflow-hidden">
-      {/* Unified Header with Language Label and Copy Button */}
       <div className="flex items-center justify-between bg-gray-300 dark:bg-gray-700 px-3 py-2">
         <span className="text-xs font-medium text-gray-700 dark:text-gray-300 uppercase">
           {language || 'Code'}
@@ -62,35 +46,27 @@ const CodeBlockWrapper = ({ language, children }) => {
         </button>
       </div>
 
-      <div ref={codeRef}>
-        <SyntaxHighlighter
-          language={language}
-          style={oneDark}
-          customStyle={{
-            margin: 0, // No margin around the block
-            padding: '1rem', // Padding inside the block
-            backgroundColor: 'transparent',
-          }}
-          codeTagProps={{
-            style: {
-              lineHeight: 'inherit',
-            },
-          }}
-          showLineNumbers={false}
-          wrapLines={false}
-          PreTag="div"
-        >
-          {String(children).trim()}
-        </SyntaxHighlighter>
-      </div>
+      <SyntaxHighlighter
+        language={language}
+        style={oneDark}
+        customStyle={{
+          margin: 0,
+          padding: '1rem',
+          backgroundColor: 'transparent',
+        }}
+        codeTagProps={{ style: { lineHeight: 'inherit' } }}
+      >
+        {codeContent}
+      </SyntaxHighlighter>
     </div>
   );
 };
 
-// Main component that decides between inline and block rendering
-const CodeBlock = ({ className, children }) => {
-  const language = className?.replace('language-', '') || '';
-  return <CodeBlockWrapper language={language}>{children}</CodeBlockWrapper>;
-};
+// Default export instead of named export
+const CodeBlock = ({ className, children }) => (
+  <CodeBlockWrapper language={className?.replace('language-', '')}>
+    {children}
+  </CodeBlockWrapper>
+);
 
-export default CodeBlock;
+export default CodeBlock; // This maintains the original import syntax
