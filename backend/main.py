@@ -44,7 +44,7 @@ CONFIG = {
     },
 
     "GENERAL_TTS": {
-        "TTS_PROVIDER": "azure",
+        "TTS_PROVIDER": "openai",
         "TTS_ENABLED": True
     },
 
