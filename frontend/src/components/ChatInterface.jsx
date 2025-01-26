@@ -31,7 +31,7 @@ const StopButton = ({ handleStop, isStoppingGeneration, actionFeedback }) => {
                 ${actionFeedback === 'stop_triggered' ? 'ring-2 ring-red-500' : ''}
                 ${isStoppingGeneration ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
                 flex items-center justify-center transition-all duration-200`}
-            title="Stop Generation and STT"
+            title="Stop Generation, TTS, and STT"
         >
             {isStoppingGeneration ? (
                 <Loader2 className="w-5 h-5 animate-spin text-gray-600 dark:text-gray-300" />
@@ -101,6 +101,17 @@ const ChatInterface = () => {
         }
     }, [darkMode]);
 
+    // **Helper Function to Send WebSocket Actions with Optional Payload**
+    const sendWebSocketAction = (action, payload = {}) => {
+        if (websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN) {
+            const message = { action, ...payload };
+            websocketRef.current.send(JSON.stringify(message));
+            console.log(`Sent WebSocket action: ${action}`, payload);
+        } else {
+            console.warn('WebSocket is not connected. Cannot send action:', action);
+        }
+    };
+
     // WebSocket initialization with reconnection
     useEffect(() => {
         let isMounted = true;
@@ -135,12 +146,7 @@ const ChatInterface = () => {
 
                         // Send STT text for GPT response
                         setIsGenerating(true);
-                        websocketRef.current.send(
-                            JSON.stringify({
-                                action: 'chat',
-                                messages: [...messagesRef.current, sttMsg],
-                            })
-                        );
+                        sendWebSocketAction('chat', { messages: [...messagesRef.current, sttMsg] });
                     }
 
                     if (data.content) {
@@ -182,7 +188,7 @@ const ChatInterface = () => {
                         console.log('Generation state updated:', data.is_generating);
                     }
                     if (data.stt_paused !== undefined) {
-                        setIsSttOn(false);  // Explicit STT pause
+                        setIsSttOn(false); // Explicit STT pause
                         console.log('STT explicitly paused');
                     }
 
@@ -199,7 +205,6 @@ const ChatInterface = () => {
                     }
 
                     // Handle other events or data as needed...
-
                 } catch (err) {
                     console.error('Error parsing WebSocket message:', err);
                 }
@@ -242,10 +247,11 @@ const ChatInterface = () => {
         };
     }, []);
 
-    // Stop generation & TTS
+    // **Updated handleStop Function**
     const handleStop = async () => {
         setIsStoppingGeneration(true);
         try {
+            // Send HTTP requests to stop generation and TTS
             const [genRes, ttsRes] = await Promise.all([
                 fetch('http://localhost:8000/api/stop-generation', { method: 'POST' }),
                 fetch('http://localhost:8000/api/stop-tts', { method: 'POST' }),
@@ -259,8 +265,17 @@ const ChatInterface = () => {
             }
 
             console.log('Stop requests sent to both generation & TTS endpoints.');
+
+            // **Send WebSocket message to stop STT**
+            sendWebSocketAction('pause-stt');
+
+            // Update frontend state
             setIsGenerating(false);
-            setIsSttOn(false); // Ensure STT is also stopped
+            setIsSttOn(false); // Ensure STT is also stopped in the UI
+
+            // **Provide Action Feedback**
+            setActionFeedback('stop_triggered');
+            setTimeout(() => setActionFeedback(null), 1000);
         } catch (error) {
             console.error('Error stopping generation and TTS:', error);
         } finally {
@@ -282,10 +297,9 @@ const ChatInterface = () => {
 
                 // If TTS is turned off, also stop TTS
                 if (!data.tts_enabled) {
-                    const stopTtsResponse = await fetch(
-                        'http://localhost:8000/api/stop-tts',
-                        { method: 'POST' }
-                    );
+                    const stopTtsResponse = await fetch('http://localhost:8000/api/stop-tts', {
+                        method: 'POST',
+                    });
                     if (!stopTtsResponse.ok) {
                         console.error('Failed to stop TTS:', stopTtsResponse.status);
                     } else {
@@ -307,9 +321,9 @@ const ChatInterface = () => {
         setIsTogglingSTT(true);
         try {
             if (!isSttOn && wsConnectionStatus === 'connected') {
-                websocketRef.current.send(JSON.stringify({ action: 'start-stt' }));
+                sendWebSocketAction('start-stt');
             } else if (wsConnectionStatus === 'connected') {
-                websocketRef.current.send(JSON.stringify({ action: 'pause-stt' }));
+                sendWebSocketAction('pause-stt');
             } else {
                 console.warn('Cannot toggle STT when WebSocket is not connected.');
             }
@@ -364,16 +378,8 @@ const ChatInterface = () => {
             ]);
 
             if (wsConnectionStatus === 'connected') {
-                websocketRef.current.send(
-                    JSON.stringify({
-                        action: 'chat',
-                        messages: [...messagesRef.current, newMessage],
-                    })
-                );
-                console.log('Sent action: chat with messages:', [
-                    ...messagesRef.current,
-                    newMessage,
-                ]);
+                sendWebSocketAction('chat', { messages: [...messagesRef.current, newMessage] });
+                console.log('Sent action: chat with messages:', [...messagesRef.current, newMessage]);
             } else {
                 console.warn('Cannot send message: WebSocket is not connected.');
                 // Optionally, you can queue messages to send once reconnected
@@ -404,7 +410,7 @@ const ChatInterface = () => {
         return rowHeightsRef.current[index] || 100;
     };
 
-    const Row = ({ index, style, data }) => {
+    const Row = React.memo(({ index, style, data }) => {
         const rowRef = useRef(null);
         const { messages } = data;
         const message = messages[index];
@@ -485,7 +491,7 @@ const ChatInterface = () => {
                 </div>
             </div>
         );
-    };
+    });
 
     /**
      * If the last item is visible, we consider ourselves "at bottom."
@@ -647,7 +653,7 @@ const ChatInterface = () => {
             {/* **Action Feedback (Optional) */}
             {actionFeedback && (
                 <div className="fixed top-16 right-4 z-20 bg-blue-500 text-white px-4 py-2 rounded shadow">
-                    {actionFeedback === 'stop_triggered' ? 'Generation Stopped' : actionFeedback}
+                    {actionFeedback === 'stop_triggered' ? 'Generation, TTS, and STT Stopped' : actionFeedback}
                 </div>
             )}
 

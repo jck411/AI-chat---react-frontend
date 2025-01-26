@@ -22,9 +22,9 @@ Thumbs.db
 
 # Google key
 backend/pihome123-0ce119dee066.json
-
 backend/keyfile.json
-
+/home/jack/ayyaihome/keyfile.json
+keyfile.json
 
 # Testing
 coverage
