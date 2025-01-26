@@ -12,7 +12,7 @@ import {
     Square,
     Sun,
     Moon,
-    AlertTriangle, // New icon for reconnecting
+    AlertTriangle, // Icon for reconnecting
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -72,8 +72,11 @@ const ChatInterface = () => {
 
     // Reconnection related refs
     const reconnectAttemptsRef = useRef(0);
-    const maxReconnectAttempts = 10;
     const reconnectTimeoutRef = useRef(null);
+
+    // **Reconnection Parameters**
+    const baseInterval = 1000; // 1 second in milliseconds
+    const maxInterval = 30 * 60 * 1000; // 30 minutes in milliseconds
 
     useEffect(() => {
         messagesRef.current = messages;
@@ -112,7 +115,7 @@ const ChatInterface = () => {
         }
     };
 
-    // WebSocket initialization with reconnection
+    // **WebSocket Initialization with Exponential Backoff and 30-Minute Cap**
     useEffect(() => {
         let isMounted = true;
 
@@ -121,20 +124,22 @@ const ChatInterface = () => {
 
             const ws = new WebSocket('ws://localhost:8000/ws/chat');
             websocketRef.current = ws;
-            setWsConnectionStatus(reconnectAttemptsRef.current === 0 ? 'connecting' : 'reconnecting');
+            setWsConnectionStatus(
+                reconnectAttemptsRef.current === 0 ? 'connecting' : 'reconnecting'
+            );
 
             ws.onopen = () => {
                 if (!isMounted) return;
                 console.log('Connected to Unified Chat WebSocket');
                 setWsConnectionStatus('connected');
-                reconnectAttemptsRef.current = 0; // Reset reconnection attempts on successful connection
+                reconnectAttemptsRef.current = 0; // Reset reconnection attempts on success
             };
 
             ws.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
 
-                    // Handle STT text and content as before
+                    // Handle STT text
                     if (data.stt_text) {
                         const sttMsg = {
                             id: Date.now(),
@@ -149,6 +154,7 @@ const ChatInterface = () => {
                         sendWebSocketAction('chat', { messages: [...messagesRef.current, sttMsg] });
                     }
 
+                    // Handle GPT content
                     if (data.content) {
                         const content = data.content;
                         console.log(`Received GPT content: ${content}`);
@@ -194,17 +200,16 @@ const ChatInterface = () => {
 
                     // Handle events
                     if (data.event === 'stop_triggered') {
-                        // Update generation and STT state without touching TTS enabled/disabled
+                        // Update generation and STT state
                         setIsGenerating(false);
                         setIsSttOn(false);
 
-                        // Optional: Add visual feedback
+                        // Provide action feedback
                         setActionFeedback('stop_triggered');
                         setTimeout(() => setActionFeedback(null), 1000);
                         console.log('Stop triggered: Generation and STT stopped');
                     }
 
-                    // Handle other events or data as needed...
                 } catch (err) {
                     console.error('Error parsing WebSocket message:', err);
                 }
@@ -220,17 +225,17 @@ const ChatInterface = () => {
                 console.log('Unified Chat WebSocket closed');
                 setWsConnectionStatus('disconnected');
 
-                if (reconnectAttemptsRef.current < maxReconnectAttempts) {
-                    const timeout = Math.min(10000, 1000 * 2 ** reconnectAttemptsRef.current);
-                    console.log(`Attempting to reconnect in ${timeout / 1000} seconds...`);
-                    reconnectTimeoutRef.current = setTimeout(() => {
-                        reconnectAttemptsRef.current += 1;
-                        connectWebSocket();
-                    }, timeout);
-                    setWsConnectionStatus('reconnecting');
-                } else {
-                    console.error('Max reconnection attempts reached.');
-                }
+                // **Calculate Retry Interval with Exponential Backoff and 30-Minute Cap**
+                reconnectAttemptsRef.current += 1;
+                const interval = Math.min(baseInterval * 2 ** reconnectAttemptsRef.current, maxInterval);
+                console.log(`Attempting to reconnect in ${interval / 1000} seconds...`);
+
+                // Schedule the next reconnection attempt
+                reconnectTimeoutRef.current = setTimeout(() => {
+                    connectWebSocket();
+                }, interval);
+
+                setWsConnectionStatus('reconnecting');
             };
         };
 
@@ -245,7 +250,7 @@ const ChatInterface = () => {
                 clearTimeout(reconnectTimeoutRef.current);
             }
         };
-    }, []);
+    }, [baseInterval, maxInterval]);
 
     // **Updated handleStop Function**
     const handleStop = async () => {
@@ -266,14 +271,14 @@ const ChatInterface = () => {
 
             console.log('Stop requests sent to both generation & TTS endpoints.');
 
-            // **Send WebSocket message to stop STT**
+            // Send WebSocket message to pause STT
             sendWebSocketAction('pause-stt');
 
             // Update frontend state
             setIsGenerating(false);
-            setIsSttOn(false); // Ensure STT is also stopped in the UI
+            setIsSttOn(false);
 
-            // **Provide Action Feedback**
+            // Provide Action Feedback
             setActionFeedback('stop_triggered');
             setTimeout(() => setActionFeedback(null), 1000);
         } catch (error) {
@@ -379,10 +384,13 @@ const ChatInterface = () => {
 
             if (wsConnectionStatus === 'connected') {
                 sendWebSocketAction('chat', { messages: [...messagesRef.current, newMessage] });
-                console.log('Sent action: chat with messages:', [...messagesRef.current, newMessage]);
+                console.log('Sent action: chat with messages:', [
+                    ...messagesRef.current,
+                    newMessage,
+                ]);
             } else {
                 console.warn('Cannot send message: WebSocket is not connected.');
-                // Optionally, you can queue messages to send once reconnected
+                // Optionally, queue messages for later
             }
         } catch (error) {
             console.error('Error sending message:', error);
@@ -494,14 +502,12 @@ const ChatInterface = () => {
     });
 
     /**
-     * If the last item is visible, we consider ourselves "at bottom."
-     * Then if new messages arrive, we auto-scroll to the bottom.
+     * Track which items are visible. If the last item is visible, we consider ourselves "at bottom."
      */
     const onItemsRendered = useCallback(
         ({ visibleStartIndex, visibleStopIndex }) => {
             const lastIndex = messages.length - 1;
             if (lastIndex < 0) return;
-
             // If the last message is in view, setAtBottom(true). Otherwise false
             if (visibleStopIndex >= lastIndex) {
                 setAtBottom(true);
@@ -513,8 +519,7 @@ const ChatInterface = () => {
     );
 
     /**
-     * If we are "atBottom" whenever messages change (e.g. new messages),
-     * scroll to the last item.
+     * If we are "atBottom" whenever messages change, scroll to the last item.
      */
     useEffect(() => {
         if (atBottom && listRef.current) {
@@ -564,7 +569,7 @@ const ChatInterface = () => {
                         )}
                     </div>
 
-                    {/* Add Clear Chat Button here */}
+                    {/* Clear Chat Button */}
                     <button
                         onClick={handleClearChat}
                         className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full flex items-center gap-2 transition-all duration-200"
@@ -573,7 +578,7 @@ const ChatInterface = () => {
                         <X className="w-5 h-5 text-gray-600 dark:text-gray-300" />
                     </button>
 
-                    {/* **Replace Existing Stop Button with StopButton Component** */}
+                    {/* Stop Button (only shown if generating) */}
                     {isGenerating && (
                         <StopButton
                             handleStop={handleStop}
@@ -650,10 +655,12 @@ const ChatInterface = () => {
                 </div>
             </div>
 
-            {/* **Action Feedback (Optional) */}
+            {/* Action Feedback (optional) */}
             {actionFeedback && (
                 <div className="fixed top-16 right-4 z-20 bg-blue-500 text-white px-4 py-2 rounded shadow">
-                    {actionFeedback === 'stop_triggered' ? 'Generation, TTS, and STT Stopped' : actionFeedback}
+                    {actionFeedback === 'stop_triggered'
+                        ? 'Generation, TTS, and STT Stopped'
+                        : actionFeedback}
                 </div>
             )}
 
