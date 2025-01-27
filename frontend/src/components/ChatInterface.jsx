@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { VariableSizeList as List } from 'react-window';
-import AutoSizer from 'react-virtualized-auto-sizer';
+
 
 import ChatHeader from './ChatHeader';
 import ChatFooter from './ChatFooter';
