@@ -9,6 +9,17 @@ const MessageList = ({ messages }) => {
   const listRef = useRef(null);
   const rowHeightsRef = useRef({});
   const [atBottom, setAtBottom] = useState(true);
+  const [userHasScrolled, setUserHasScrolled] = useState(false);
+  const lastScrollTop = useRef(0);
+  const lastMessageCountRef = useRef(messages.length);
+
+  // Reset userHasScrolled when new messages arrive
+  useEffect(() => {
+    if (messages.length > lastMessageCountRef.current) {
+      setUserHasScrolled(false);
+    }
+    lastMessageCountRef.current = messages.length;
+  }, [messages.length]);
 
   // Measure row sizes
   const getItemSize = (index) => {
@@ -100,12 +111,36 @@ const MessageList = ({ messages }) => {
     );
   });
 
+
+  // Add scroll handler
+  const handleScroll = useCallback(({ scrollOffset, scrollDirection }) => {
+    // Detect if user is scrolling up
+    if (scrollOffset < lastScrollTop.current) {
+      setUserHasScrolled(true);
+    }
+
+    // Reset userHasScrolled when user scrolls to bottom manually
+    const listElement = listRef.current?._outerRef;
+    if (listElement) {
+      const isAtBottom =
+        Math.abs(
+          listElement.scrollHeight - listElement.clientHeight - scrollOffset
+        ) < 1;
+      
+      if (isAtBottom) {
+        setUserHasScrolled(false);
+      }
+    }
+
+    lastScrollTop.current = scrollOffset;
+  }, []);
+
   // Track visible items
   const onItemsRendered = useCallback(
     ({ visibleStartIndex, visibleStopIndex }) => {
       const lastIndex = messages.length - 1;
       if (lastIndex < 0) return;
-      // If the last message is in view, "at bottom"
+      
       if (visibleStopIndex >= lastIndex) {
         setAtBottom(true);
       } else {
@@ -115,19 +150,20 @@ const MessageList = ({ messages }) => {
     [messages.length]
   );
 
-  // Auto-scroll to bottom if atBottom
+
+  // Modified auto-scroll effect
   useEffect(() => {
-    if (atBottom && listRef.current) {
+    if (atBottom && !userHasScrolled && listRef.current) {
       listRef.current.scrollToItem(messages.length - 1, 'end');
     }
-  }, [messages, atBottom]);
+  }, [messages, atBottom, userHasScrolled]);
 
   return (
     <AutoSizer>
       {({ height, width }) => (
         <List
           ref={listRef}
-          className="scrollbar-thin scrollbar-thumb-gray-400 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent" // Tailwind scrollbar classes
+          className="scrollbar-thin scrollbar-thumb-gray-400 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent"
           height={height}
           width={width}
           itemCount={messages.length}
@@ -135,6 +171,7 @@ const MessageList = ({ messages }) => {
           itemData={{ messages }}
           overscanCount={5}
           onItemsRendered={onItemsRendered}
+          onScroll={handleScroll} // Add scroll handler
         >
           {Row}
         </List>
