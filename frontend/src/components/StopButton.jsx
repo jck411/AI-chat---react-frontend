@@ -1,3 +1,4 @@
+// StopButton.jsx
 import React from 'react';
 import { Loader2, Square } from 'lucide-react';
 

@@ -19,6 +19,7 @@ from tools.functions import (
     get_tools,
     get_available_functions
 )
+# Import the wake word thread starter
 from wakeword.porcupine_listener import start_wake_word_thread
 
 # Prepare PyAudio + AudioPlayer
@@ -485,8 +486,6 @@ async def unified_chat_websocket(websocket: WebSocket):
         connected_websockets.discard(websocket)
         stt_instance.pause_listening()
         await broadcast_stt_state()
-        # DO NOT send anything to the socket after it's closed
-        # or you'll get "Unexpected ASGI message 'websocket.send'..."
         try:
             await websocket.close()
         except:

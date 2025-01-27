@@ -24,7 +24,6 @@ def listen_for_wake_words():
     stop_there_path = "/home/jack/ayyaihome/backend/wakeword/picovoice_wakewords/stop-there_en_linux_v3_0_0/stop-there_en_linux_v3_0_0.ppn"
     computer_path   = "/home/jack/ayyaihome/backend/wakeword/picovoice_wakewords/computer_en_linux_v3_0_0/computer_en_linux_v3_0_0.ppn"
 
-
     porcupine = pvporcupine.create(
         access_key=access_key,
         keyword_paths=[stop_there_path, computer_path]
@@ -48,10 +47,14 @@ def listen_for_wake_words():
             # If no keyword is detected, keyword_index will be -1
             if keyword_index == 0:
                 # "stop there" was detected
-                print("[WakeWord Thread] Detected 'stop there' -> stopping TTS and generation.")
+                print("[WakeWord Thread] Detected 'stop there' -> stopping TTS, generation, and pausing STT.")
                 try:
+                    # 1) Stop TTS
                     requests.post("http://localhost:8000/api/stop-tts")
+                    # 2) Stop generation
                     requests.post("http://localhost:8000/api/stop-generation")
+                    # 3) Pause STT
+                    requests.post("http://localhost:8000/api/pause-stt")
                 except Exception as e:
                     print(f"[WakeWord Thread] Error calling stop endpoints: {e}")
 
