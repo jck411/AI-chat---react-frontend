@@ -50,7 +50,11 @@ const MessageList = ({ messages }) => {
       <div style={style}>
         <div
           ref={rowRef}
-          className={`px-4 pb-4 ${index === 0 ? 'pt-10' : 'pt-2'}`}
+          className={`px-4 ${
+            index === 0 ? 'pt-24' : 'pt-2'
+          } ${
+            index === messages.length - 1 ? 'pb-24' : 'pb-4'
+          }`}
         >
           <div
             className={`flex ${

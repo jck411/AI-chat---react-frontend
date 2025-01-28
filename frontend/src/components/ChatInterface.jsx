@@ -366,39 +366,43 @@ const ChatInterface = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gray-100 dark:bg-gray-900">
-      {/* Chat Header */}
-      <ChatHeader
-        wsConnectionStatus={wsConnectionStatus}
-        isGenerating={isGenerating}
-        handleStop={handleStop}
-        isStoppingGeneration={isStoppingGeneration}
-        actionFeedback={actionFeedback}
-        handleClearChat={handleClearChat}
-        toggleTTS={toggleTTS}
-        ttsEnabled={ttsEnabled}
-        isTogglingTTS={isTogglingTTS}
-        toggleSTT={toggleSTT}
-        isSttOn={isSttOn}
-        isTogglingSTT={isTogglingSTT}
-        darkMode={darkMode}
-        setDarkMode={setDarkMode}
-      />
+    <div className="h-screen overflow-hidden bg-gray-100 dark:bg-gray-900">
+      {/* Main scrollable content that will show behind header/footer */}
+      <div className="h-full overflow-y-auto">
+        <MessageList messages={messages} />
+      </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto">
-       <MessageList messages={messages} />
-     </div>
+      {/* Fixed header */}
+      <div className="fixed top-0 left-0 right-0 z-10">
+        <ChatHeader
+          wsConnectionStatus={wsConnectionStatus}
+          isGenerating={isGenerating}
+          handleStop={handleStop}
+          isStoppingGeneration={isStoppingGeneration}
+          actionFeedback={actionFeedback}
+          handleClearChat={handleClearChat}
+          toggleTTS={toggleTTS}
+          ttsEnabled={ttsEnabled}
+          isTogglingTTS={isTogglingTTS}
+          toggleSTT={toggleSTT}
+          isSttOn={isSttOn}
+          isTogglingSTT={isTogglingSTT}
+          darkMode={darkMode}
+          setDarkMode={setDarkMode}
+        />
+      </div>
 
-      {/* Chat Footer */}
-      <ChatFooter
-        isGenerating={isGenerating}
-        sttTranscript={sttTranscript}
-        setSttTranscript={setSttTranscript}
-        inputMessage={inputMessage}
-        setInputMessage={setInputMessage}
-        handleSend={handleSend}
-      />
+      {/* Fixed footer */}
+      <div className="fixed bottom-0 left-0 right-0 z-10">
+        <ChatFooter
+          isGenerating={isGenerating}
+          sttTranscript={sttTranscript}
+          setSttTranscript={setSttTranscript}
+          inputMessage={inputMessage}
+          setInputMessage={setInputMessage}
+          handleSend={handleSend}
+        />
+      </div>
     </div>
   );
 };
