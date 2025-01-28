@@ -1,6 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-
-
 import ChatHeader from './ChatHeader';
 import ChatFooter from './ChatFooter';
 import MessageList from './MessageList';
@@ -33,6 +31,18 @@ const ChatInterface = () => {
   const baseInterval = 1000; // 1 second
   const maxInterval = 30 * 60 * 1000; // 30 minutes
 
+  // Helper to determine backend URL
+  const getBackendUrl = () => {
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    return isLocal ? 'http://localhost:8000' : 'http://192.168.1.226:8000';
+  };
+
+  // Helper to determine WebSocket URL
+  const getWebSocketUrl = () => {
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    return isLocal ? 'ws://localhost:8000/ws/chat' : 'ws://192.168.1.226:8000/ws/chat';
+  };
+
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
@@ -53,7 +63,7 @@ const ChatInterface = () => {
     const connectWebSocket = () => {
       if (!isMounted) return;
 
-      const ws = new WebSocket('ws://localhost:8000/ws/chat');
+      const ws = new WebSocket(getWebSocketUrl());
       websocketRef.current = ws;
 
       // If it's the very first attempt, status = "connecting"; otherwise "reconnecting".
@@ -192,9 +202,10 @@ const ChatInterface = () => {
   const handleStop = async () => {
     setIsStoppingGeneration(true);
     try {
+      const backendUrl = getBackendUrl();
       const [genRes, ttsRes] = await Promise.all([
-        fetch('http://localhost:8000/api/stop-generation', { method: 'POST' }),
-        fetch('http://localhost:8000/api/stop-tts', { method: 'POST' }),
+        fetch(`${backendUrl}/api/stop-generation`, { method: 'POST' }),
+        fetch(`${backendUrl}/api/stop-tts`, { method: 'POST' }),
       ]);
 
       if (!genRes.ok) {
@@ -222,7 +233,8 @@ const ChatInterface = () => {
   const toggleTTS = async () => {
     setIsTogglingTTS(true);
     try {
-      const response = await fetch('http://localhost:8000/api/toggle-tts', {
+      const backendUrl = getBackendUrl();
+      const response = await fetch(`${backendUrl}/api/toggle-tts`, {
         method: 'POST',
       });
       if (response.ok) {
@@ -232,7 +244,7 @@ const ChatInterface = () => {
         // If TTS is turned off, also stop TTS
         if (!data.tts_enabled) {
           const stopTtsResponse = await fetch(
-            'http://localhost:8000/api/stop-tts',
+            `${backendUrl}/api/stop-tts`,
             { method: 'POST' }
           );
           if (!stopTtsResponse.ok) {
