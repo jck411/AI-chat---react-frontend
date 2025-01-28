@@ -6,10 +6,16 @@ fuser -k 8000/tcp
 git add .
 
 git commit -m "comment" 
+git push origin master
 
-git push -u origin startagain.3
+git stash                     # Optional: Stash local changes
 
-git pull --rebase origin startagain.3
+git fetch origin              # Fetch latest changes
+git checkout master           # Switch to master branch
+git reset --hard origin/master # Reset to remote master
+
+git clean -fd                 # Optional: Remove untracked files
+git stash pop                 # Optional: Reapply stashed changes
 
 
 git reset --hard HEAD
@@ -17,6 +23,9 @@ git clean -f
 
 from root
 uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+
+npm run electron-start
+
 
 
 
