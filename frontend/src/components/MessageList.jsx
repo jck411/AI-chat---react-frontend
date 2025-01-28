@@ -1,5 +1,6 @@
 // src/components/MessageList.jsx
 import React, { useRef, useEffect, useCallback, useState } from 'react';
+import { ArrowDown } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { VariableSizeList as List } from 'react-window';
@@ -9,28 +10,82 @@ import CodeBlock, { InlineCode } from './CodeBlock';
 const MessageList = ({ messages }) => {
   const listRef = useRef(null);
   const rowHeightsRef = useRef({});
-  const [atBottom, setAtBottom] = useState(true);
-  const [userHasScrolled, setUserHasScrolled] = useState(false);
-  const lastScrollTop = useRef(0);
-  const lastMessageCountRef = useRef(messages.length);
-
-  // Reset userHasScrolled when new messages arrive
-  useEffect(() => {
-    if (messages.length > lastMessageCountRef.current) {
-      setUserHasScrolled(false);
-      if (listRef.current) {
-        listRef.current.scrollToItem(messages.length - 1, 'end');
-      }
-    }
-    lastMessageCountRef.current = messages.length;
-  }, [messages.length]);
-
-  // Measure row sizes
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
+  const [showJumpButton, setShowJumpButton] = useState(false);
+  const lastMessageRef = useRef('');
+  const lastMessageLengthRef = useRef(0);
+  const lastScrollTopRef = useRef(0);
+  const isUserScrollingRef = useRef(false);
+  
+  // Get item size for virtualization
   const getItemSize = (index) => {
     return rowHeightsRef.current[index] || 100;
   };
 
-  // Row component
+  const scrollToBottom = useCallback(() => {
+    if (listRef.current) {
+      listRef.current.scrollToItem(messages.length - 1, 'end');
+      setShouldAutoScroll(true);
+      setShowJumpButton(false);
+      isUserScrollingRef.current = false;
+    }
+  }, [messages.length]);
+
+  // Auto-scroll when messages change or last message is updated
+  useEffect(() => {
+    if (!messages.length) return;
+    
+    const lastMessage = messages[messages.length - 1];
+    const isNewMessage = lastMessageRef.current !== lastMessage.id;
+    const currentLength = lastMessage.text.length;
+    const hasGrown = currentLength > lastMessageLengthRef.current;
+    
+    lastMessageRef.current = lastMessage.id;
+    lastMessageLengthRef.current = currentLength;
+
+    if (shouldAutoScroll && (isNewMessage || hasGrown) && !isUserScrollingRef.current) {
+      requestAnimationFrame(() => {
+        scrollToBottom();
+      });
+    }
+  }, [messages, shouldAutoScroll, scrollToBottom]);
+
+  // Handle scroll events
+  const handleScroll = useCallback(({ scrollOffset }) => {
+    const listElement = listRef.current?._outerRef;
+    if (!listElement) return;
+
+    // Detect if user is actively scrolling up
+    if (scrollOffset < lastScrollTopRef.current) {
+      isUserScrollingRef.current = true;
+      setShouldAutoScroll(false);
+    }
+
+    // Detect if user has scrolled to bottom
+    const isAtBottom =
+      Math.abs(
+        listElement.scrollHeight - listElement.clientHeight - scrollOffset
+      ) < 1;
+
+    if (isAtBottom) {
+      isUserScrollingRef.current = false;
+      setShouldAutoScroll(true);
+      setShowJumpButton(false);
+    } else {
+      setShowJumpButton(true);
+    }
+
+    lastScrollTopRef.current = scrollOffset;
+  }, []);
+
+  // Reset scroll behavior when unmounting
+  useEffect(() => {
+    return () => {
+      setShouldAutoScroll(true);
+      isUserScrollingRef.current = false;
+    };
+  }, []);
+
   const Row = React.memo(({ index, style, data }) => {
     const rowRef = useRef(null);
     const { messages } = data;
@@ -103,8 +158,6 @@ const MessageList = ({ messages }) => {
                   {message.text}
                 </div>
               )}
-
-              {/* Timestamp */}
               <div
                 className={`text-xs mt-1 ${
                   message.sender === 'user' ? 'text-blue-100' : 'text-gray-400'
@@ -119,70 +172,37 @@ const MessageList = ({ messages }) => {
     );
   });
 
-  // Add scroll handler
-  const handleScroll = useCallback(({ scrollOffset, scrollDirection }) => {
-    // Detect if user is scrolling up
-    if (scrollOffset < lastScrollTop.current) {
-      setUserHasScrolled(true);
-    }
-
-    // Reset userHasScrolled when user scrolls to bottom manually
-    const listElement = listRef.current?._outerRef;
-    if (listElement) {
-      const isAtBottom =
-        Math.abs(
-          listElement.scrollHeight - listElement.clientHeight - scrollOffset
-        ) < 1;
-
-      if (isAtBottom) {
-        setUserHasScrolled(false);
-      }
-    }
-
-    lastScrollTop.current = scrollOffset;
-  }, []);
-
-  // Track visible items
-  const onItemsRendered = useCallback(
-    ({ visibleStartIndex, visibleStopIndex }) => {
-      const lastIndex = messages.length - 1;
-      if (lastIndex < 0) return;
-
-      if (visibleStopIndex >= lastIndex) {
-        setAtBottom(true);
-      } else {
-        setAtBottom(false);
-      }
-    },
-    [messages.length]
-  );
-
-  // Modified auto-scroll effect
-  useEffect(() => {
-    if (atBottom && !userHasScrolled && listRef.current) {
-      listRef.current.scrollToItem(messages.length - 1, 'end');
-    }
-  }, [messages, atBottom, userHasScrolled]);
-
   return (
-    <AutoSizer>
-      {({ height, width }) => (
-        <List
-          ref={listRef}
-          className="scrollbar-thin scrollbar-thumb-gray-400 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent"
-          height={height}
-          width={width}
-          itemCount={messages.length}
-          itemSize={getItemSize}
-          itemData={{ messages }}
-          overscanCount={5}
-          onItemsRendered={onItemsRendered}
-          onScroll={handleScroll} // Add scroll handler
+    <div className="relative h-full">
+      <AutoSizer>
+        {({ height, width }) => (
+          <List
+            ref={listRef}
+            className="scrollbar-thin scrollbar-thumb-gray-400 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent"
+            height={height}
+            width={width}
+            itemCount={messages.length}
+            itemSize={getItemSize}
+            itemData={{ messages }}
+            overscanCount={5}
+            onScroll={handleScroll}
+          >
+            {Row}
+          </List>
+        )}
+      </AutoSizer>
+
+      {showJumpButton && (
+        <button
+          onClick={scrollToBottom}
+          className="absolute bottom-20 right-4 bg-blue-500 hover:bg-blue-600 text-white rounded-full p-2 shadow-lg transition-all duration-200 flex items-center gap-2"
+          aria-label="Jump to latest message"
         >
-          {Row}
-        </List>
+          <ArrowDown size={20} />
+          <span className="pr-1">Latest</span>
+        </button>
       )}
-    </AutoSizer>
+    </div>
   );
 };
 
