@@ -4,6 +4,7 @@ from typing import Any, AsyncIterator, Dict, List, Optional, Sequence, Union, Se
 
 from fastapi import FastAPI, HTTPException, APIRouter, WebSocket, WebSocketDisconnect, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse  # Import added
 import uvicorn
 
 from config import CONFIG, conditional_print, TTS_STOP_EVENT, GEN_STOP_EVENT
@@ -341,6 +342,17 @@ async def stream_openai_completion(
 # ------------------------------------------------------------------
 # REST Endpoints
 # ------------------------------------------------------------------
+
+
+
+# health check endpoint
+@app.get("/health", response_class=JSONResponse)
+async def health_check():
+    """
+    Health check endpoint to verify that the server is operational.
+    """
+    return {"status": "OK"}
+
 @app.options("/api/options")
 async def openai_options():
     return Response(status_code=200)

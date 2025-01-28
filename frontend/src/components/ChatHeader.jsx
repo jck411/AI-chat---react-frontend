@@ -1,3 +1,4 @@
+// src/components/ChatHeader.jsx
 import React from 'react';
 import {
   Loader2,
@@ -43,23 +44,24 @@ const ChatHeader = ({
       <div
         className="
           fixed top-0 left-0 right-0 z-10 
-          bg-white/30 dark:bg-gray-800/30 
+          bg-glass dark:bg-glassDark 
           backdrop-blur-lg 
           border 
-          border-white/40 dark:border-gray-700/40 
+          border-glass-border dark:border-glassDark-border 
           shadow-lg 
           p-4 
-          flex justify-between items-center
+          flex flex-col sm:flex-row justify-between items-center
           transition-colors
         "
       >
         {/* Left side (title/logo if needed) */}
-        <h1 className="text-xl font-semibold text-gray-800 dark:text-gray-100">
-          {/* Chat Title */}
+        <h1 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-2 sm:mb-0">
+          {/* Replace with your Chat Title or Logo */}
+          
         </h1>
 
         {/* Right side icons and controls */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 flex-wrap">
           {/* WebSocket Connection Status */}
           <div title={wsConnectionStatus} className="flex items-center gap-1">
             {wsConnectionStatus === 'connected' ? (

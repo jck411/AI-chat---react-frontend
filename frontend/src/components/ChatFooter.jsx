@@ -1,3 +1,4 @@
+// src/components/ChatFooter.jsx
 import React, { useRef, useEffect } from 'react';
 import { Send, Loader2 } from 'lucide-react';
 
@@ -36,7 +37,7 @@ const ChatFooter = ({
   };
 
   return (
-    <div className="bg-glass dark:bg-glassDark p-4 backdrop-blur-sm"> {/* Updated Background */}
+    <div className="fixed bottom-0 left-0 right-0 bg-glass dark:bg-glassDark pt-6 px-4 pb-4 backdrop-blur-sm">
       <div className="flex items-start gap-4 max-w-4xl mx-auto">
         <textarea
           ref={textareaRef}

@@ -1,3 +1,4 @@
+// src/components/MessageList.jsx
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -17,6 +18,9 @@ const MessageList = ({ messages }) => {
   useEffect(() => {
     if (messages.length > lastMessageCountRef.current) {
       setUserHasScrolled(false);
+      if (listRef.current) {
+        listRef.current.scrollToItem(messages.length - 1, 'end');
+      }
     }
     lastMessageCountRef.current = messages.length;
   }, [messages.length]);
@@ -111,7 +115,6 @@ const MessageList = ({ messages }) => {
     );
   });
 
-
   // Add scroll handler
   const handleScroll = useCallback(({ scrollOffset, scrollDirection }) => {
     // Detect if user is scrolling up
@@ -126,7 +129,7 @@ const MessageList = ({ messages }) => {
         Math.abs(
           listElement.scrollHeight - listElement.clientHeight - scrollOffset
         ) < 1;
-      
+
       if (isAtBottom) {
         setUserHasScrolled(false);
       }
@@ -140,7 +143,7 @@ const MessageList = ({ messages }) => {
     ({ visibleStartIndex, visibleStopIndex }) => {
       const lastIndex = messages.length - 1;
       if (lastIndex < 0) return;
-      
+
       if (visibleStopIndex >= lastIndex) {
         setAtBottom(true);
       } else {
@@ -149,7 +152,6 @@ const MessageList = ({ messages }) => {
     },
     [messages.length]
   );
-
 
   // Modified auto-scroll effect
   useEffect(() => {

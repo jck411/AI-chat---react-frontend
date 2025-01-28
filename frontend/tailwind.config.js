@@ -1,3 +1,4 @@
+// tailwind.config.js
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: ['./src/**/*.{js,jsx,ts,tsx}'],
@@ -42,10 +43,12 @@ module.exports = {
           },
         },
       },
-      // Optional: Add custom colors or utilities if needed
+      // Custom Colors
       colors: {
-        glass: 'rgba(255, 255, 255, 0.3)',
-        glassDark: 'rgba(31, 41, 55, 0.3)',
+        glass: 'rgba(255, 255, 255, 0.25)', // 25% opacity for increased transparency
+        glassDark: 'rgba(31, 41, 55, 0.25)', // 25% opacity for dark mode
+        'glass-border': 'rgba(255, 255, 255, 0.3)', // 30% opacity border for light mode
+        'glassDark-border': 'rgba(31, 41, 55, 0.3)', // 30% opacity border for dark mode
       },
       backdropBlur: {
         xs: '2px',

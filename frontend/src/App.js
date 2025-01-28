@@ -1,12 +1,10 @@
-import React from 'react';
+// src/App.jsx
+import React, { useState } from 'react';
 import ChatInterface from './components/ChatInterface';
 
-function App() {
-  return (
-    <div className="App">
-      <ChatInterface />
-    </div>
-  );
-}
+const App = () => {
+  // You can manage global states here if needed
+  return <ChatInterface />;
+};
 
 export default App;

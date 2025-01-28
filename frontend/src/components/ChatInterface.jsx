@@ -1,11 +1,18 @@
-import React, { useState, useEffect, useRef } from 'react';
+// src/components/ChatInterface.jsx
 
+import React, { useState, useEffect, useRef } from 'react';
 
 import ChatHeader from './ChatHeader';
 import ChatFooter from './ChatFooter';
 import MessageList from './MessageList';
 
+// Define constants outside the component to maintain stable references
+const baseInterval = 1000; // 1 second
+const maxInterval = 30 * 60 * 1000; // 30 minutes
+const maxReconnectAttempts = 10; // Maximum reconnection attempts
+
 const ChatInterface = () => {
+  // State declarations
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isStoppingGeneration, setIsStoppingGeneration] = useState(false);
@@ -29,10 +36,10 @@ const ChatInterface = () => {
   const reconnectAttemptsRef = useRef(0);
   const reconnectTimeoutRef = useRef(null);
 
-  // Exponential backoff limits
-  const baseInterval = 1000; // 1 second
-  const maxInterval = 30 * 60 * 1000; // 30 minutes
+  // Track initial connection attempt to suppress expected initial errors
+  const isInitialConnectionRef = useRef(true);
 
+  // Update messagesRef whenever messages change
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
@@ -46,12 +53,33 @@ const ChatInterface = () => {
     }
   }, [darkMode]);
 
+  // Function to check server health
+  const checkServerHealth = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/health');
+      return response.ok;
+    } catch (error) {
+      console.error('Error checking server health:', error);
+      return false;
+    }
+  };
+
   // WebSocket initialization with exponential backoff
   useEffect(() => {
     let isMounted = true;
 
-    const connectWebSocket = () => {
+    const connectWebSocket = async () => {
       if (!isMounted) return;
+
+      // Wait for server readiness
+      const serverReady = await checkServerHealth();
+      if (!serverReady) {
+        console.warn('Server not ready. Retrying in 2 seconds...');
+        reconnectTimeoutRef.current = setTimeout(() => {
+          if (isMounted) connectWebSocket();
+        }, 2000); // Retry after 2 seconds
+        return;
+      }
 
       const ws = new WebSocket('ws://localhost:8000/ws/chat');
       websocketRef.current = ws;
@@ -65,7 +93,8 @@ const ChatInterface = () => {
         if (!isMounted) return;
         console.log('Connected to Unified Chat WebSocket');
         setWsConnectionStatus('connected');
-        reconnectAttemptsRef.current = 0; // reset attempts on success
+        reconnectAttemptsRef.current = 0; // Reset attempts on success
+        isInitialConnectionRef.current = false; // Reset initial connection flag
       };
 
       ws.onmessage = (event) => {
@@ -138,7 +167,13 @@ const ChatInterface = () => {
       };
 
       ws.onerror = (error) => {
-        console.error('Unified Chat WebSocket error:', error);
+        if (isInitialConnectionRef.current) {
+          // Suppress logging for the initial connection attempt
+          console.warn('Initial WebSocket connection error (may be transient):', error);
+          isInitialConnectionRef.current = false;
+        } else {
+          console.error('Unified Chat WebSocket error:', error);
+        }
       };
 
       ws.onclose = () => {
@@ -146,8 +181,14 @@ const ChatInterface = () => {
         console.log('Unified Chat WebSocket closed');
         setWsConnectionStatus('disconnected');
 
-        // Exponential backoff with 30-min cap
+        // Increment reconnection attempts
         reconnectAttemptsRef.current += 1;
+
+        if (reconnectAttemptsRef.current > maxReconnectAttempts) {
+          console.error('Max WebSocket reconnection attempts reached.');
+          return;
+        }
+
         const interval = Math.min(
           baseInterval * 2 ** reconnectAttemptsRef.current,
           maxInterval
@@ -155,14 +196,17 @@ const ChatInterface = () => {
         console.log(`Attempting to reconnect in ${interval / 1000} seconds...`);
 
         reconnectTimeoutRef.current = setTimeout(() => {
-          connectWebSocket();
+          if (isMounted) connectWebSocket();
         }, interval);
 
         setWsConnectionStatus('reconnecting');
       };
     };
 
-    connectWebSocket();
+    // Introduce a short delay before the first connection attempt
+    const initialDelay = setTimeout(() => {
+      connectWebSocket();
+    }, 1000); // 1 second delay
 
     return () => {
       isMounted = false;
@@ -172,8 +216,9 @@ const ChatInterface = () => {
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
       }
+      clearTimeout(initialDelay);
     };
-  }, [baseInterval, maxInterval]);
+  }, []); // Empty dependency array to run once on mount
 
   // Helper to send WebSocket actions
   const sendWebSocketAction = (action, payload = {}) => {
@@ -322,7 +367,7 @@ const ChatInterface = () => {
 
   return (
     <div className="flex flex-col h-screen bg-gray-100 dark:bg-gray-900">
-      {/* Top bar / header */}
+      {/* Chat Header */}
       <ChatHeader
         wsConnectionStatus={wsConnectionStatus}
         isGenerating={isGenerating}
@@ -341,11 +386,11 @@ const ChatInterface = () => {
       />
 
       {/* Messages */}
-      <div className="flex-1 pt-16">
-        <MessageList messages={messages} />
-      </div>
+      <div className="flex-1 overflow-y-auto">
+       <MessageList messages={messages} />
+     </div>
 
-      {/* Footer */}
+      {/* Chat Footer */}
       <ChatFooter
         isGenerating={isGenerating}
         sttTranscript={sttTranscript}
