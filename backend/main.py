@@ -1,4 +1,3 @@
-# main.py
 import asyncio
 import re
 from typing import Any, AsyncIterator, Dict, List, Optional, Sequence, Union, Set
@@ -8,23 +7,21 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
 from config import CONFIG, conditional_print, TTS_STOP_EVENT, GEN_STOP_EVENT
-from audio.pyaudio_singleton import PyAudioSingleton
-from audio.player import AudioPlayer
-from stt.azure_stt import stt_instance
-from tts.azure_tts import azure_text_to_speech_processor
-from tts.openai_tts import openai_text_to_speech_processor
+# Only import PyAudio and STT/TTS if needed
+if not CONFIG["FRONTEND_TTS_STT"]["ENABLED"]:
+    from audio.pyaudio_singleton import PyAudioSingleton
+    from audio.player import AudioPlayer
+    from stt.azure_stt import stt_instance
+    from tts.azure_tts import azure_text_to_speech_processor
+    from tts.openai_tts import openai_text_to_speech_processor
+    from wakeword.porcupine_listener import start_wake_word_thread
+
 from tools.functions import (
     check_args,
     get_function_and_args,
     get_tools,
     get_available_functions
 )
-# Import the wake word thread starter
-from wakeword.porcupine_listener import start_wake_word_thread
-
-# Prepare PyAudio + AudioPlayer
-pyaudio_instance = PyAudioSingleton()
-audio_player = AudioPlayer(pyaudio_instance)
 
 connected_websockets: Set[WebSocket] = set()
 app = FastAPI()
@@ -38,8 +35,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# -------------- Broadcast STT state --------------
+# If the user wants backend TTS/STT, prepare these instances
+if not CONFIG["FRONTEND_TTS_STT"]["ENABLED"]:
+    pyaudio_instance = PyAudioSingleton()
+    audio_player = AudioPlayer(pyaudio_instance)
+
+# ------------------------------------------------------------------
+# Broadcast STT state (only if STT is running in the backend)
+# ------------------------------------------------------------------
 async def broadcast_stt_state():
+    """
+    Let connected websockets know if STT is listening or paused.
+    If FRONTEND_TTS_STT is enabled, we skip this entirely.
+    """
+    if CONFIG["FRONTEND_TTS_STT"]["ENABLED"]:
+        return  # Skip all STT notifications
     message = {"is_listening": stt_instance.is_listening}
     living_sockets = []
     for ws in list(connected_websockets):
@@ -51,14 +61,21 @@ async def broadcast_stt_state():
     connected_websockets.clear()
     connected_websockets.update(living_sockets)
 
-# -------------- Shutdown Handler --------------
+# ------------------------------------------------------------------
+# Shutdown Handler
+# ------------------------------------------------------------------
 def shutdown():
     print("Shutting down server...")
-    audio_player.stop_stream()
-    PyAudioSingleton.terminate()
+    if not CONFIG["FRONTEND_TTS_STT"]["ENABLED"]:
+        audio_player.stop_stream()
+        # Terminate pyaudio
+        from audio.pyaudio_singleton import PyAudioSingleton
+        PyAudioSingleton.terminate()
     print("Shutdown complete.")
 
-# -------------- Audio Player Helper --------------
+# ------------------------------------------------------------------
+# Audio Player Helper (only if TTS runs in backend)
+# ------------------------------------------------------------------
 def audio_player_sync(
     audio_queue: asyncio.Queue,
     loop: asyncio.AbstractEventLoop,
@@ -95,20 +112,27 @@ async def start_audio_player_async(
 ):
     await asyncio.to_thread(audio_player_sync, audio_queue, loop, stop_event)
 
-# -------------- TTS Orchestrator --------------
+# ------------------------------------------------------------------
+# TTS Orchestrator
+# ------------------------------------------------------------------
 async def process_streams(
     phrase_queue: asyncio.Queue,
     audio_queue: asyncio.Queue,
     stop_event: asyncio.Event
 ):
-    if not CONFIG["GENERAL_TTS"]["TTS_ENABLED"]:
-        # TTS disabled => just consume the queue
+    """
+    If TTS is disabled OR if front-end TTS is set, we do not generate audio.
+    We only consume the phrase_queue so that the generator can keep going.
+    """
+    if CONFIG["FRONTEND_TTS_STT"]["ENABLED"] or not CONFIG["GENERAL_TTS"]["TTS_ENABLED"]:
+        # Just consume the queue without producing audio
         while True:
             phrase = await phrase_queue.get()
             if phrase is None:
                 break
         return
 
+    # If we do want TTS (backend mode):
     try:
         provider = CONFIG["GENERAL_TTS"]["TTS_PROVIDER"].lower()
         if provider == "azure":
@@ -138,7 +162,9 @@ async def process_streams(
         stt_instance.start_listening()
         await broadcast_stt_state()
 
-# -------------- Chat Streaming Helpers --------------
+# ------------------------------------------------------------------
+# Chat Streaming Helpers
+# ------------------------------------------------------------------
 def extract_content_from_openai_chunk(chunk: Any) -> Optional[str]:
     try:
         return chunk.choices[0].delta.content
@@ -194,7 +220,9 @@ async def process_chunks(
                     else:
                         break
 
-# -------------- OpenAI Completion Stream --------------
+# ------------------------------------------------------------------
+# OpenAI Completion Stream
+# ------------------------------------------------------------------
 async def stream_openai_completion(
     messages: Sequence[Dict[str, Union[str, Any]]],
     phrase_queue: asyncio.Queue,
@@ -310,13 +338,18 @@ async def stream_openai_completion(
         await chunk_queue.put(None)
         raise HTTPException(status_code=500, detail=f"OpenAI API error: {e}")
 
-# -------------- REST Endpoints --------------
+# ------------------------------------------------------------------
+# REST Endpoints
+# ------------------------------------------------------------------
 @app.options("/api/options")
 async def openai_options():
     return Response(status_code=200)
 
 @app.post("/api/start-stt")
 async def start_stt_endpoint():
+    if CONFIG["FRONTEND_TTS_STT"]["ENABLED"]:
+        return {"detail": "Frontend TTS/STT mode is enabled; backend STT is not used."}
+
     if not stt_instance.is_listening:
         stt_instance.start_listening()
         await broadcast_stt_state()
@@ -324,6 +357,9 @@ async def start_stt_endpoint():
 
 @app.post("/api/pause-stt")
 async def pause_stt_endpoint():
+    if CONFIG["FRONTEND_TTS_STT"]["ENABLED"]:
+        return {"detail": "Frontend TTS/STT mode is enabled; backend STT is not used."}
+
     if stt_instance.is_listening:
         stt_instance.pause_listening()
         await broadcast_stt_state()
@@ -331,6 +367,9 @@ async def pause_stt_endpoint():
 
 @app.post("/api/toggle-audio")
 async def toggle_audio_playback():
+    if CONFIG["FRONTEND_TTS_STT"]["ENABLED"]:
+        return {"detail": "Frontend TTS/STT mode is enabled; no audio playback toggling in backend."}
+
     try:
         if audio_player.is_playing:
             audio_player.stop_stream()
@@ -343,6 +382,9 @@ async def toggle_audio_playback():
 
 @app.post("/api/toggle-tts")
 async def toggle_tts():
+    if CONFIG["FRONTEND_TTS_STT"]["ENABLED"]:
+        return {"detail": "Frontend TTS/STT mode is enabled; no backend TTS toggling."}
+
     try:
         current_status = CONFIG["GENERAL_TTS"]["TTS_ENABLED"]
         CONFIG["GENERAL_TTS"]["TTS_ENABLED"] = not current_status
@@ -353,6 +395,9 @@ async def toggle_tts():
 
 @app.post("/api/stop-tts")
 async def stop_tts():
+    if CONFIG["FRONTEND_TTS_STT"]["ENABLED"]:
+        return {"detail": "Frontend TTS/STT mode is enabled; no TTS to stop in backend."}
+
     TTS_STOP_EVENT.set()
     return {"detail": "TTS stop event triggered. Ongoing TTS tasks should exit soon."}
 
@@ -361,9 +406,23 @@ async def stop_generation():
     GEN_STOP_EVENT.set()
     return {"detail": "Generation stop event triggered. Ongoing text generation will exit soon."}
 
-# -------------- WebSocket: /ws/chat --------------
+@app.get("/api/tts-stt-frontend-status")
+def tts_stt_frontend_status():
+    """
+    Simple endpoint returning whether TTS/STT is handled by the front end.
+    """
+    mode = "frontend" if CONFIG["FRONTEND_TTS_STT"]["ENABLED"] else "backend"
+    return {"mode": mode}
+
+# ------------------------------------------------------------------
+# WebSocket: /ws/chat
+# ------------------------------------------------------------------
 async def stream_stt_to_client(websocket: WebSocket):
-    while True:
+    """
+    Continuously read recognized text from local STT and push to client.
+    Only runs if BACKEND STT is enabled. 
+    """
+    while not CONFIG["FRONTEND_TTS_STT"]["ENABLED"]:
         recognized_text = stt_instance.get_speech_nowait()
         if recognized_text:
             await websocket.send_json({"stt_text": recognized_text})
@@ -405,8 +464,10 @@ async def unified_chat_websocket(websocket: WebSocket):
     print("Client connected to /ws/chat")
     connected_websockets.add(websocket)
 
-    # Start a background task to push recognized STT text
-    stt_task = asyncio.create_task(stream_stt_to_client(websocket))
+    # If the user wants backend STT, start a background task pushing recognized text
+    stt_task = None
+    if not CONFIG["FRONTEND_TTS_STT"]["ENABLED"]:
+        stt_task = asyncio.create_task(stream_stt_to_client(websocket))
 
     # Create an openai.AsyncOpenAI client on each new connection
     import os
@@ -429,14 +490,23 @@ async def unified_chat_websocket(websocket: WebSocket):
             action = data.get("action")
 
             if action == "start-stt":
-                stt_instance.start_listening()
-                await broadcast_stt_state()
+                if CONFIG["FRONTEND_TTS_STT"]["ENABLED"]:
+                    # If front-end TTS/STT is on, do nothing special in backend
+                    pass
+                else:
+                    stt_instance.start_listening()
+                    await broadcast_stt_state()
 
             elif action == "pause-stt":
-                stt_instance.pause_listening()
-                await broadcast_stt_state()
+                if CONFIG["FRONTEND_TTS_STT"]["ENABLED"]:
+                    # If front-end TTS/STT is on, do nothing
+                    pass
+                else:
+                    stt_instance.pause_listening()
+                    await broadcast_stt_state()
 
             elif action == "chat":
+                # On each new chat request, ensure we clear the stop events
                 TTS_STOP_EVENT.clear()
                 GEN_STOP_EVENT.clear()
 
@@ -446,11 +516,13 @@ async def unified_chat_websocket(websocket: WebSocket):
                 phrase_queue = asyncio.Queue()
                 audio_queue = asyncio.Queue()
 
-                # Temporarily pause STT
-                stt_instance.pause_listening()
-                await broadcast_stt_state()
-                conditional_print("STT paused before processing chat.", "segment")
+                # If backend STT is active, pause it while we speak TTS
+                if not CONFIG["FRONTEND_TTS_STT"]["ENABLED"]:
+                    stt_instance.pause_listening()
+                    await broadcast_stt_state()
+                    conditional_print("STT paused before processing chat.", "segment")
 
+                # Start the TTS orchestrator, which will remain idle if TTS is disabled or front-end TTS is used
                 process_streams_task = asyncio.create_task(
                     process_streams(phrase_queue, audio_queue, TTS_STOP_EVENT)
                 )
@@ -468,33 +540,40 @@ async def unified_chat_websocket(websocket: WebSocket):
                             break
                         await websocket.send_json({"content": content})
                 finally:
-                    # Signal TTS that there's no more text
+                    # Signal TTS that there's no more text to speak
                     await phrase_queue.put(None)
                     await process_streams_task
 
-                    # Resume STT
-                    stt_instance.start_listening()
-                    await broadcast_stt_state()
-                    conditional_print("STT resumed after processing chat.", "segment")
+                    # Resume backend STT if it exists
+                    if not CONFIG["FRONTEND_TTS_STT"]["ENABLED"]:
+                        stt_instance.start_listening()
+                        await broadcast_stt_state()
+                        conditional_print("STT resumed after processing chat.", "segment")
 
     except WebSocketDisconnect:
         print("Client disconnected from /ws/chat")
     except Exception as e:
         print(f"WebSocket error in /ws/chat: {e}")
     finally:
-        stt_task.cancel()
+        if stt_task:
+            stt_task.cancel()
         connected_websockets.discard(websocket)
-        stt_instance.pause_listening()
-        await broadcast_stt_state()
+        if not CONFIG["FRONTEND_TTS_STT"]["ENABLED"]:
+            stt_instance.pause_listening()
+            await broadcast_stt_state()
         try:
             await websocket.close()
         except:
             pass
 
+# ------------------------------------------------------------------
+# Startup & Shutdown
+# ------------------------------------------------------------------
 @app.on_event("startup")
 def on_startup():
-    # Start the wake word detection thread
-    start_wake_word_thread()
+    # Start the wake word detection thread if not front-end mode
+    if not CONFIG["FRONTEND_TTS_STT"]["ENABLED"]:
+        start_wake_word_thread()
 
 @app.on_event("shutdown")
 def on_shutdown():

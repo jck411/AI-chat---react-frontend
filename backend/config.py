@@ -1,4 +1,3 @@
-# config.py
 import os
 from dotenv import load_dotenv
 import asyncio
@@ -76,6 +75,12 @@ CONFIG = {
         "PRINT_SEGMENTS": True,
         "PRINT_TOOL_CALLS": True,
         "PRINT_FUNCTION_CALLS": True
+    },
+    "FRONTEND_TTS_STT": {
+        # If True, the **frontend** is solely responsible for STT and TTS.
+        # The backend will NOT process TTS audio or run local STT,
+        # and will NOT notify the frontend about TTS/STT states.
+        "ENABLED": True
     }
 }
 
