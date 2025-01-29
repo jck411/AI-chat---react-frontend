@@ -16,8 +16,8 @@ const MessageList = ({ messages }) => {
   const lastMessageLengthRef = useRef(0);
   const lastScrollTopRef = useRef(0);
   const isUserScrollingRef = useRef(false);
+  const resizeTimeoutRef = useRef(null);
   
-  // Get item size for virtualization
   const getItemSize = (index) => {
     return rowHeightsRef.current[index] || 100;
   };
@@ -31,7 +31,15 @@ const MessageList = ({ messages }) => {
     }
   }, [messages.length]);
 
-  // Auto-scroll when messages change or last message is updated
+  // Force recalculation of row heights when content changes
+  const recalculateHeights = useCallback(() => {
+    if (listRef.current) {
+      Object.keys(rowHeightsRef.current).forEach(index => {
+        listRef.current.resetAfterIndex(parseInt(index), false);
+      });
+    }
+  }, []);
+
   useEffect(() => {
     if (!messages.length) return;
     
@@ -44,24 +52,39 @@ const MessageList = ({ messages }) => {
     lastMessageLengthRef.current = currentLength;
 
     if (shouldAutoScroll && (isNewMessage || hasGrown) && !isUserScrollingRef.current) {
-      requestAnimationFrame(() => {
-        scrollToBottom();
-      });
-    }
-  }, [messages, shouldAutoScroll, scrollToBottom]);
+      // Clear any existing timeout
+      if (resizeTimeoutRef.current) {
+        clearTimeout(resizeTimeoutRef.current);
+      }
 
-  // Handle scroll events
+      // Set a new timeout to handle layout changes
+      resizeTimeoutRef.current = setTimeout(() => {
+        recalculateHeights();
+        requestAnimationFrame(() => {
+          scrollToBottom();
+        });
+      }, 50); // Small delay to allow for rendering
+    }
+  }, [messages, shouldAutoScroll, scrollToBottom, recalculateHeights]);
+
+  // Cleanup timeouts
+  useEffect(() => {
+    return () => {
+      if (resizeTimeoutRef.current) {
+        clearTimeout(resizeTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const handleScroll = useCallback(({ scrollOffset }) => {
     const listElement = listRef.current?._outerRef;
     if (!listElement) return;
 
-    // Detect if user is actively scrolling up
     if (scrollOffset < lastScrollTopRef.current) {
       isUserScrollingRef.current = true;
       setShouldAutoScroll(false);
     }
 
-    // Detect if user has scrolled to bottom
     const isAtBottom =
       Math.abs(
         listElement.scrollHeight - listElement.clientHeight - scrollOffset
@@ -78,31 +101,46 @@ const MessageList = ({ messages }) => {
     lastScrollTopRef.current = scrollOffset;
   }, []);
 
-  // Reset scroll behavior when unmounting
-  useEffect(() => {
-    return () => {
-      setShouldAutoScroll(true);
-      isUserScrollingRef.current = false;
-    };
-  }, []);
-
   const Row = React.memo(({ index, style, data }) => {
     const rowRef = useRef(null);
     const { messages } = data;
     const message = messages[index];
+    const [heightCalculated, setHeightCalculated] = useState(false);
 
     useEffect(() => {
-      if (rowRef.current && listRef.current) {
-        const measuredHeight = rowRef.current.getBoundingClientRect().height;
-        if (rowHeightsRef.current[index] !== measuredHeight) {
-          rowHeightsRef.current[index] = measuredHeight;
-          listRef.current.resetAfterIndex(index, false);
+      const calculateHeight = () => {
+        if (rowRef.current && listRef.current) {
+          const measuredHeight = rowRef.current.getBoundingClientRect().height;
+          if (rowHeightsRef.current[index] !== measuredHeight) {
+            rowHeightsRef.current[index] = measuredHeight;
+            listRef.current.resetAfterIndex(index, false);
+            setHeightCalculated(true);
+          }
         }
+      };
+
+      // Initial calculation
+      calculateHeight();
+
+      // Create an observer for size changes
+      const resizeObserver = new ResizeObserver(() => {
+        calculateHeight();
+        if (shouldAutoScroll && index === messages.length - 1) {
+          requestAnimationFrame(scrollToBottom);
+        }
+      });
+
+      if (rowRef.current) {
+        resizeObserver.observe(rowRef.current);
       }
-    }, [message.text, index]);
+
+      return () => {
+        resizeObserver.disconnect();
+      };
+    }, [message.text, index, messages.length]);
 
     return (
-      <div style={style}>
+      <div style={{ ...style, height: heightCalculated ? undefined : style.height }}>
         <div
           ref={rowRef}
           className={`px-4 ${
