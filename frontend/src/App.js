@@ -1,10 +1,13 @@
-import React from 'react';
-import ChatInterface from './components/ChatInterface';
+// src/App.js
+
+import React from "react";
+import DeepgramComponent from "./components/Deepgram/DeepgramComponent";
 
 function App() {
   return (
     <div className="App">
-      <ChatInterface />
+      <h1>Deepgram Live Transcription</h1>
+      <DeepgramComponent />
     </div>
   );
 }

@@ -13,6 +13,7 @@ from audio.player import AudioPlayer
 from stt.azure_stt import stt_instance
 from tts.azure_tts import azure_text_to_speech_processor
 from tts.openai_tts import openai_text_to_speech_processor
+from tts.frontend_openai_tts import frontend_openai_text_to_speech_processor  
 from tools.functions import (
     check_args,
     get_function_and_args,
@@ -99,7 +100,8 @@ async def start_audio_player_async(
 async def process_streams(
     phrase_queue: asyncio.Queue,
     audio_queue: asyncio.Queue,
-    stop_event: asyncio.Event
+    stop_event: asyncio.Event,
+    websocket: Optional[WebSocket] = None  # Add websocket parameter
 ):
     if not CONFIG["GENERAL_TTS"]["TTS_ENABLED"]:
         # TTS disabled => just consume the queue
@@ -110,24 +112,37 @@ async def process_streams(
         return
 
     try:
+        tts_output = CONFIG["GENERAL_TTS"].get("TTS_OUTPUT", "local")
         provider = CONFIG["GENERAL_TTS"]["TTS_PROVIDER"].lower()
-        if provider == "azure":
-            tts_processor = azure_text_to_speech_processor
-        elif provider == "openai":
-            tts_processor = openai_text_to_speech_processor
-        else:
-            raise ValueError(f"Unsupported TTS provider: {provider}")
-
-        loop = asyncio.get_running_loop()
 
         stt_instance.pause_listening()
         conditional_print("STT paused before starting TTS.", "segment")
 
-        tts_task = asyncio.create_task(tts_processor(phrase_queue, audio_queue, stop_event))
-        audio_player_task = asyncio.create_task(start_audio_player_async(audio_queue, loop, stop_event))
-        conditional_print("Started TTS and audio playback tasks.", "default")
+        if tts_output == "frontend":
+            if not websocket:
+                raise ValueError("WebSocket connection required for frontend TTS")
+            
+            if provider == "openai":
+                await frontend_openai_text_to_speech_processor(
+                    phrase_queue,
+                    websocket,
+                    stop_event
+                )
+            else:
+                raise ValueError(f"Frontend TTS not supported for provider: {provider}")
+        else:  # local TTS
+            if provider == "azure":
+                tts_processor = azure_text_to_speech_processor
+            elif provider == "openai":
+                tts_processor = openai_text_to_speech_processor
+            else:
+                raise ValueError(f"Unsupported TTS provider: {provider}")
 
-        await asyncio.gather(tts_task, audio_player_task)
+            loop = asyncio.get_running_loop()
+            tts_task = asyncio.create_task(tts_processor(phrase_queue, audio_queue, stop_event))
+            audio_player_task = asyncio.create_task(start_audio_player_async(audio_queue, loop, stop_event))
+            conditional_print("Started TTS and audio playback tasks.", "default")
+            await asyncio.gather(tts_task, audio_player_task)
 
         stt_instance.start_listening()
         conditional_print("STT resumed after completing TTS.", "segment")
@@ -452,7 +467,12 @@ async def unified_chat_websocket(websocket: WebSocket):
                 conditional_print("STT paused before processing chat.", "segment")
 
                 process_streams_task = asyncio.create_task(
-                    process_streams(phrase_queue, audio_queue, TTS_STOP_EVENT)
+                    process_streams(
+                        phrase_queue,
+                        audio_queue,
+                        TTS_STOP_EVENT,
+                        websocket  # Pass the websocket connection
+                    )
                 )
 
                 # Stream the chat completion

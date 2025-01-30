@@ -21,8 +21,9 @@ CONFIG = {
     },
 
     "GENERAL_TTS": {
-        "TTS_PROVIDER": "azure",
-        "TTS_ENABLED": True
+        "TTS_ENABLED": True,
+        "TTS_PROVIDER": "openai",
+        "TTS_OUTPUT": "frontend"  # or "frontend"
     },
 
     "PROCESSING_PIPELINE": {

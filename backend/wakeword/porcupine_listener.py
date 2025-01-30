@@ -1,4 +1,3 @@
-# wakeword/porcupine_listener.py
 import os
 import struct
 import threading
@@ -6,6 +5,9 @@ import requests
 import pyaudio
 import pvporcupine
 from dotenv import load_dotenv
+
+# Get the absolute path of the current script's directory
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def listen_for_wake_words():
     """
@@ -20,9 +22,9 @@ def listen_for_wake_words():
     if not access_key:
         raise ValueError("PORCUPINE_ACCESS_KEY not found in .env file.")
 
-    # Paths to your .ppn files
-    stop_there_path = "/home/jack/ayyaihome/backend/wakeword/picovoice_wakewords/stop-there_en_linux_v3_0_0/stop-there_en_linux_v3_0_0.ppn"
-    computer_path   = "/home/jack/ayyaihome/backend/wakeword/picovoice_wakewords/computer_en_linux_v3_0_0/computer_en_linux_v3_0_0.ppn"
+    # Paths to .ppn files (relative to this script)
+    stop_there_path = os.path.join(BASE_DIR, "picovoice_wakewords", "stop-there_en_linux_v3_0_0", "stop-there_en_linux_v3_0_0.ppn")
+    computer_path   = os.path.join(BASE_DIR, "picovoice_wakewords", "computer_en_linux_v3_0_0", "computer_en_linux_v3_0_0.ppn")
 
     porcupine = pvporcupine.create(
         access_key=access_key,

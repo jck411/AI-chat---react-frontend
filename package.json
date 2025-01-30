@@ -1,0 +1,26 @@
+{
+  "name": "ai-chat---react-frontend",
+  "version": "1.0.0",
+  "description": "fuser -k 8000/tcp",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jck411/AI-chat---react-frontend.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/jck411/AI-chat---react-frontend/issues"
+  },
+  "homepage": "https://github.com/jck411/AI-chat---react-frontend#readme",
+  "dependencies": {
+    "@deepgram/sdk": "^3.9.0",
+    "dotenv": "^16.4.7",
+    "node-fetch": "^2.7.0",
+    "play-sound": "^1.1.6"
+  }
+}

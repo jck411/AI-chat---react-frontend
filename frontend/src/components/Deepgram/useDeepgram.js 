@@ -1,0 +1,58 @@
+// src/components/Deepgram/useDeepgram.js
+
+import { useState, useCallback, useEffect } from 'react';
+import { createClient } from '@deepgram/sdk';
+
+export const useDeepgram = (apiKey) => {
+  const [client, setClient] = useState(null);
+  const [error, setError] = useState(null);
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  useEffect(() => {
+    if (!apiKey) {
+      setError(new Error('Deepgram API key is required'));
+      return;
+    }
+
+    try {
+      const deepgramClient = createClient(apiKey);
+      setClient(deepgramClient);
+      setIsInitialized(true);
+      setError(null);
+    } catch (err) {
+      setError(err);
+      setIsInitialized(false);
+    }
+  }, [apiKey]);
+
+  const createConnection = useCallback((options = {}) => {
+    if (!client) {
+      throw new Error('Deepgram client not initialized');
+    }
+
+    const defaultOptions = {
+      model: 'nova-2',
+      language: 'en-US',
+      smart_format: true,
+      interim_results: true,
+      encoding: 'linear16',
+      sample_rate: 16000,
+      channels: 1,
+      endpointing: true,
+      utterance_end_ms: 1000,
+      words: true
+    };
+
+    return client.listen.live({
+      ...defaultOptions,
+      ...options
+    });
+  }, [client]);
+
+  return {
+    client,
+    error,
+    isInitialized,
+    createConnection
+  };
+};
