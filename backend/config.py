@@ -23,7 +23,7 @@ CONFIG = {
     "GENERAL_TTS": {
         "TTS_ENABLED": True,
         "TTS_PROVIDER": "openai",
-        "TTS_OUTPUT": "frontend"  # or "frontend"
+        "TTS_OUTPUT": "frontend"  #backend or "frontend"
     },
 
     "PROCESSING_PIPELINE": {
