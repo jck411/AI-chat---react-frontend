@@ -1,3 +1,4 @@
+/* index.css */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -9,4 +10,53 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Add scrollbar styles here */
+.scrollbar-overlay {
+  scrollbar-gutter: stable;
+}
+
+.scrollbar-overlay::-webkit-scrollbar {
+  width: 8px;
+  background-color: transparent;
+}
+
+.scrollbar-overlay::-webkit-scrollbar-thumb {
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+  background-color: theme('colors.gray.300');
+}
+
+.dark .scrollbar-overlay::-webkit-scrollbar-thumb {
+  background-color: theme('colors.gray.600');
+
+}
+
+
+/* In your global CSS */
+.scrollbar-track-transparent::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thumb-gray-300::-webkit-scrollbar-thumb {
+  background: rgba(209, 213, 219, 0.5);
+}
+
+.dark .scrollbar-thumb-gray-600::-webkit-scrollbar-thumb {
+  background: rgba(75, 85, 99, 0.5);
+}
+
+/* Force scrollbar to be always present */
+.scrollbar-thin {
+  scrollbar-gutter: stable;
+  overflow-y: overlay;
+}
+
+/* Optional: Adjust scrollbar width for consistency */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+  background: transparent;
 }

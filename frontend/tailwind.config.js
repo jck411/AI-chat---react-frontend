@@ -6,6 +6,9 @@ module.exports = {
   darkMode: 'class',
   theme: {
     extend: {
+      scrollbarGutter: {
+        stable: 'stable',
+      },
       typography: {
         DEFAULT: {
           css: {
@@ -43,6 +46,9 @@ module.exports = {
             },
           },
         },
+      },
+      maxWidth: {
+        'chat': '1000px', // Changed from 48rem to 1000px
       },
     },
   },

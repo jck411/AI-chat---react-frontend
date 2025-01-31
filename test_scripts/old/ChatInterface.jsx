@@ -208,7 +208,7 @@ const ChatInterface = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gray-100">
+    <div className="flex flex-col h-screen bg-gray-100 max-w-4xl mx-auto">
       {/* TOP BAR */}
       <div className="bg-white shadow-sm p-4 flex justify-between items-center">
         <h1 className="text-xl font-semibold text-gray-800">STT + TTS Chat</h1>

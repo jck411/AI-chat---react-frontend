@@ -66,62 +66,66 @@ const MemoizedRow = React.memo(
 
         return (
             <div style={style}>
-                <div ref={rowRef} className="px-4 pt-2 pb-4">
-                    <div
-                        className={`flex ${
-                            message.sender === 'user' ? 'justify-end' : 'justify-start'
-                        }`}
-                    >
-                        <div
-                            className={`max-w-[80%] rounded-lg p-4 ${
-                                message.sender === 'user'
-                                    ? 'bg-blue-500 text-white shadow-sm'
-                                    : 'bg-transparent text-gray-800 dark:text-gray-100 shadow-none'
-                            }`}
-                        >
-                            {message.sender === 'assistant' ? (
-                                <ReactMarkdown
-                                    remarkPlugins={[remarkGfm]}
-                                    components={{
-                                        code: ({ inline, className, children }) => {
-                                            const match = /language-(\w+)/.exec(className || '');
-                                            if (!inline && match) {
-                                                return (
-                                                    <CodeBlock className={className}>
-                                                        {children}
-                                                    </CodeBlock>
-                                                );
-                                            }
-                                            return <InlineCode>{children}</InlineCode>;
-                                        },
-                                        a: ({ node, ...props }) => (
-                                            <a
-                                                {...props}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 underline"
-                                            >
-                                                {props.children}
-                                            </a>
-                                        ),
-                                    }}
-                                    className="prose dark:prose-invert max-w-none break-words"
-                                >
-                                    {message.text}
-                                </ReactMarkdown>
-                            ) : (
-                                <div className="whitespace-pre-wrap break-words">
-                                    {message.text}
-                                </div>
-                            )}
-                            <div
-                                className={`text-xs mt-1 ${
-                                    message.sender === 'user'
-                                        ? 'text-blue-100'
-                                        : 'text-gray-400'
+                <div className="max-w-chat mx-auto">
+                    <div ref={rowRef} className="px-4 pt-2 pb-4">
+                        <div className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                            <div 
+                                className={`max-w-[80%] ${
+                                    message.sender === 'user' 
+                                        ? 'ml-auto' 
+                                        : 'mr-auto'
                                 }`}
                             >
-                                {message.timestamp}
+                                <div className={`rounded-lg p-4 ${
+                                    message.sender === 'user' 
+                                        ? 'bg-blue-500 text-white shadow-sm' 
+                                        : 'text-gray-800 dark:text-gray-100'
+                                }`}>
+                                    {message.sender === 'assistant' ? (
+                                        <ReactMarkdown
+                                            remarkPlugins={[remarkGfm]}
+                                            components={{
+                                                code: ({ inline, className, children }) => {
+                                                    const match = /language-(\w+)/.exec(className || '');
+                                                    if (!inline && match) {
+                                                        return (
+                                                            <CodeBlock className={className}>
+                                                                {children}
+                                                            </CodeBlock>
+                                                        );
+                                                    }
+                                                    return <InlineCode>{children}</InlineCode>;
+                                                },
+                                                a: ({ node, ...props }) => (
+                                                    <a
+                                                        {...props}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 underline"
+                                                    >
+                                                        {props.children}
+                                                    </a>
+                                                ),
+                                            }}
+                                            className="prose dark:prose-invert max-w-none break-words"
+                                        >
+                                            {message.text}
+                                        </ReactMarkdown>
+                                    ) : (
+                                        <div className="whitespace-pre-wrap break-words">
+                                            {message.text}
+                                        </div>
+                                    )}
+                                    <div
+                                        className={`text-xs mt-1 ${
+                                            message.sender === 'user'
+                                                ? 'text-blue-100'
+                                                : 'text-gray-400'
+                                        }`}
+                                    >
+                                        {message.timestamp}
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -130,7 +134,6 @@ const MemoizedRow = React.memo(
         );
     },
     (prev, next) => {
-        // Only re-render if the message text or style changed
         return (
             prev.data.messages[prev.index] === next.data.messages[next.index] &&
             prev.style === next.style
@@ -675,7 +678,7 @@ const ChatInterface = () => {
 
             {/* Top Bar */}
             <div className="flex-none bg-white/80 dark:bg-gray-800/80 shadow-sm p-4 backdrop-blur-md">
-                <div className="flex justify-between items-center max-w-6xl mx-auto">
+                <div className="flex justify-between items-center max-w-chat mx-auto">
                     <h1 className="text-xl font-semibold text-gray-800 dark:text-gray-100">
                         {/* Title or Logo Here */}
                     </h1>
@@ -707,31 +710,38 @@ const ChatInterface = () => {
 
             {/* Messages Area */}
             <div className="flex-1 overflow-hidden">
-                <div className="h-full scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent">
-                    <AutoSizer>
-                        {({ height, width }) => (
-                            <List
-                                ref={listRef}
-                                height={height}
-                                width={width}
-                                itemCount={messages.length}
-                                itemSize={getItemSize}
-                                itemData={{ messages, listRef, rowHeightsRef }}
-                                overscanCount={5}
-                                onItemsRendered={onItemsRendered}
-                                itemKey={(index) => messages[index].id}
-                                className="scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent"
-                            >
-                                {MemoizedRow}
-                            </List>
-                        )}
-                    </AutoSizer>
-                </div>
-            </div>
+  <AutoSizer>
+    {({ height, width }) => (
+      <div 
+        className="relative"
+        style={{ 
+          height,
+          width: width - 8, // Compensate for scrollbar width
+          paddingRight: 8 // Reserve space for scrollbar
+        }}
+      >
+        <List
+          ref={listRef}
+          height={height}
+          width={width} // Full width including scrollbar space
+          itemCount={messages.length}
+          itemSize={getItemSize}
+          itemData={{ messages, listRef, rowHeightsRef }}
+          overscanCount={5}
+          onItemsRendered={onItemsRendered}
+          itemKey={(index) => messages[index].id}
+          className="scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent absolute right-0"
+        >
+          {MemoizedRow}
+        </List>
+      </div>
+    )}
+  </AutoSizer>
+</div>
 
             {/* Input Area */}
             <div className="flex-none bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
-                <div className="max-w-6xl mx-auto p-4">
+                <div className="max-w-chat mx-auto p-4">
                     <div className="flex items-start gap-4">
                         <textarea
                             ref={textareaRef}
