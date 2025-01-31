@@ -19,7 +19,6 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { VariableSizeList as List } from 'react-window';
 import AutoSizer from 'react-virtualized-auto-sizer';
-
 import CodeBlock, { InlineCode } from './CodeBlock';
 
 // --------------------------------------
@@ -114,6 +113,7 @@ const MemoizedRow = React.memo(
                                     {message.text}
                                 </div>
                             )}
+
                             <div
                                 className={`text-xs mt-1 ${
                                     message.sender === 'user'
@@ -130,7 +130,6 @@ const MemoizedRow = React.memo(
         );
     },
     (prev, next) => {
-        // Only re-render if the message text or style changed
         return (
             prev.data.messages[prev.index] === next.data.messages[next.index] &&
             prev.style === next.style
@@ -320,6 +319,14 @@ const ChatInterface = () => {
     const messagesRef = useRef(messages);
     const textareaRef = useRef(null);
 
+    // Reconnection
+    const reconnectAttemptsRef = useRef(0);
+    const maxReconnectAttempts = 10;
+    const reconnectTimeoutRef = useRef(null);
+
+    // If messages are created while disconnected, store them here
+    const queuedMessages = useRef([]);
+
     // Keep messages in sync with messagesRef
     useEffect(() => {
         messagesRef.current = messages;
@@ -354,119 +361,174 @@ const ChatInterface = () => {
     }, [darkMode]);
 
     // -----------------------------
-    // WebSocket: Single-connection (no reconnection logic)
+    // WebSocket: connect and handle reconnections
     // -----------------------------
     useEffect(() => {
         let isMounted = true;
 
-        // Establish WebSocket
-        const ws = new WebSocket('ws://localhost:8000/ws/chat');
-        websocketRef.current = ws;
-        setWsConnectionStatus('connecting');
-
-        ws.onopen = () => {
+        const connectWebSocket = () => {
             if (!isMounted) return;
-            console.log('Connected to Unified Chat WebSocket');
-            setWsConnectionStatus('connected');
-        };
 
-        ws.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
+            // Close any existing connection first
+            if (websocketRef.current?.readyState === WebSocket.OPEN) {
+                websocketRef.current.close();
+            }
 
-                // If the server returns recognized STT text
-                if (data.stt_text) {
-                    const sttMsg = {
-                        id: Date.now(),
-                        sender: 'user',
-                        text: data.stt_text,
-                        timestamp: new Date().toLocaleTimeString(),
-                    };
-                    setMessages((prev) => [...prev, sttMsg]);
+            const ws = new WebSocket('ws://localhost:8000/ws/chat');
+            websocketRef.current = ws;
 
-                    // Immediately request a GPT response
-                    setIsGenerating(true);
+            // If it's the first attempt, call it 'connecting',
+            // else if we've lost the connection, it's 'reconnecting'
+            setWsConnectionStatus(
+                reconnectAttemptsRef.current === 0 ? 'connecting' : 'reconnecting'
+            );
+
+            ws.onopen = () => {
+                if (!isMounted) return;
+                console.log('Connected to Unified Chat WebSocket');
+                setWsConnectionStatus('connected');
+                reconnectAttemptsRef.current = 0;
+
+                // If we had messages queued while offline, send them now
+                if (queuedMessages.current.length > 0) {
                     websocketRef.current.send(
                         JSON.stringify({
-                            action: 'chat',
-                            messages: [...messagesRef.current, sttMsg],
+                            action: 'bulk_chat',
+                            messages: queuedMessages.current,
                         })
                     );
+                    queuedMessages.current = [];
                 }
+            };
 
-                // If there's GPT content
-                if (data.content) {
-                    const content = data.content;
-                    console.log(`Received GPT content: ${content}`);
-                    setMessages((prev) => {
-                        const lastIndex = prev.length - 1;
-                        // If the last message is assistant, append chunk
-                        if (prev[lastIndex] && prev[lastIndex].sender === 'assistant') {
-                            return [
-                                ...prev.slice(0, lastIndex),
-                                {
-                                    ...prev[lastIndex],
-                                    text: prev[lastIndex].text + content,
-                                },
-                            ];
-                        } else {
-                            // Otherwise, create new assistant message
-                            return [
-                                ...prev,
-                                {
-                                    id: Date.now(),
-                                    sender: 'assistant',
-                                    text: content,
-                                    timestamp: new Date().toLocaleTimeString(),
-                                },
-                            ];
-                        }
-                    });
-                }
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
 
-                // Update STT or generation states from server
-                if (data.is_listening !== undefined) {
-                    setIsSttOn(data.is_listening);
-                    console.log('STT state updated:', data.is_listening);
-                }
-                if (data.stt_paused !== undefined) {
-                    setIsSttOn(false);
-                    console.log('STT explicitly paused');
-                }
-                if (data.is_generating !== undefined) {
-                    setIsGenerating(data.is_generating);
-                    console.log('Generation state updated:', data.is_generating);
-                }
+                    // If the server returns recognized STT text
+                    if (data.stt_text) {
+                        const sttMsg = {
+                            id: Date.now(),
+                            sender: 'user',
+                            text: data.stt_text,
+                            timestamp: new Date().toLocaleTimeString(),
+                        };
+                        setMessages((prev) => [...prev, sttMsg]);
 
-                // If server sends 'stop_triggered'
-                if (data.event === 'stop_triggered') {
-                    setIsGenerating(false);
-                    setIsSttOn(false);
-                    setActionFeedback('stop_triggered');
-                    setTimeout(() => setActionFeedback(null), 1000);
-                    console.log('Stop triggered: Generation and STT stopped');
+                        // Immediately request a GPT response
+                        setIsGenerating(true);
+                        websocketRef.current.send(
+                            JSON.stringify({
+                                action: 'chat',
+                                messages: [...messagesRef.current, sttMsg],
+                            })
+                        );
+                    }
+
+                    // If there's GPT content
+                    if (data.content) {
+                        const content = data.content;
+                        console.log(`Received GPT content: ${content}`);
+                        setMessages((prev) => {
+                            const lastIndex = prev.length - 1;
+                            // If the last message is assistant, append chunk
+                            if (prev[lastIndex] && prev[lastIndex].sender === 'assistant') {
+                                return [
+                                    ...prev.slice(0, lastIndex),
+                                    {
+                                        ...prev[lastIndex],
+                                        text: prev[lastIndex].text + content,
+                                    },
+                                ];
+                            } else {
+                                // Otherwise, create new assistant message
+                                return [
+                                    ...prev,
+                                    {
+                                        id: Date.now(),
+                                        sender: 'assistant',
+                                        text: content,
+                                        timestamp: new Date().toLocaleTimeString(),
+                                    },
+                                ];
+                            }
+                        });
+                    }
+
+                    // STT toggles
+                    if (data.is_listening !== undefined) {
+                        setIsSttOn(data.is_listening);
+                        console.log('STT state updated:', data.is_listening);
+                    }
+                    if (data.stt_paused !== undefined) {
+                        setIsSttOn(false);
+                        console.log('STT explicitly paused');
+                    }
+
+                    // Generation toggle
+                    if (data.is_generating !== undefined) {
+                        setIsGenerating(data.is_generating);
+                        console.log('Generation state updated:', data.is_generating);
+                    }
+
+                    // If server sends 'stop_triggered'
+                    if (data.event === 'stop_triggered') {
+                        setIsGenerating(false);
+                        setIsSttOn(false);
+                        setActionFeedback('stop_triggered');
+                        setTimeout(() => setActionFeedback(null), 1000);
+                        console.log('Stop triggered: Generation and STT stopped');
+                    }
+                } catch (err) {
+                    console.error('Error parsing WebSocket message:', err);
                 }
-            } catch (err) {
-                console.error('Error parsing WebSocket message:', err);
-            }
+            };
+
+            ws.onerror = (error) => {
+                console.error('Unified Chat WebSocket error:', error);
+            };
+
+            ws.onclose = () => {
+                if (!isMounted) return;
+                console.log('Unified Chat WebSocket closed');
+                setWsConnectionStatus('disconnected');
+
+                // Attempt to reconnect if we haven't exceeded attempts
+                if (reconnectAttemptsRef.current < maxReconnectAttempts) {
+                    const timeout = Math.min(
+                        10000,
+                        1000 * 2 ** reconnectAttemptsRef.current
+                    );
+                    console.log(`Attempting to reconnect in ${timeout / 1000} seconds...`);
+                    reconnectTimeoutRef.current = setTimeout(() => {
+                        reconnectAttemptsRef.current += 1;
+                        connectWebSocket();
+                    }, timeout);
+                    setWsConnectionStatus('reconnecting');
+                } else {
+                    console.error('Max reconnection attempts reached.');
+                }
+            };
         };
 
-        ws.onerror = (error) => {
-            console.error('Unified Chat WebSocket error:', error);
-        };
-
-        ws.onclose = () => {
-            if (!isMounted) return;
-            console.log('Unified Chat WebSocket closed');
-            setWsConnectionStatus('disconnected');
-        };
+        connectWebSocket();
 
         // Cleanup
         return () => {
             isMounted = false;
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.close();
+            clearTimeout(reconnectTimeoutRef.current);
+            if (websocketRef.current) {
+                const ws = websocketRef.current;
+                ws.onopen = null;
+                ws.onclose = null;
+                ws.onerror = null;
+                ws.onmessage = null;
+                if (ws.readyState === WebSocket.OPEN) {
+                    ws.close();
+                }
             }
+            reconnectAttemptsRef.current = 0;
+            websocketRef.current = null;
         };
     }, []);
 
@@ -539,12 +601,9 @@ const ChatInterface = () => {
     const toggleSTT = async () => {
         setIsTogglingSTT(true);
         try {
-            // If currently OFF, request to start
             if (!isSttOn && wsConnectionStatus === 'connected') {
                 websocketRef.current.send(JSON.stringify({ action: 'start-stt' }));
-            }
-            // Else if ON, request to pause
-            else if (isSttOn && wsConnectionStatus === 'connected') {
+            } else if (wsConnectionStatus === 'connected') {
                 websocketRef.current.send(JSON.stringify({ action: 'pause-stt' }));
             } else {
                 console.warn('Cannot toggle STT when WebSocket is not connected.');
@@ -587,14 +646,15 @@ const ChatInterface = () => {
         setInputMessage('');
         setSttTranscript('');
 
+        // If not connected, queue it
         if (wsConnectionStatus !== 'connected') {
-            console.warn('Cannot send message: WebSocket is not connected.');
+            queuedMessages.current.push(newMessage);
+            console.log('Message queued - will send on reconnect');
             return;
         }
 
         setIsGenerating(true);
         try {
-            // Immediately add an "assistant" placeholder for streaming
             const aiMessageId = Date.now() + 1;
             setMessages((prev) => [
                 ...prev,
@@ -606,17 +666,20 @@ const ChatInterface = () => {
                 },
             ]);
 
-            // Tell server to process the conversation so far
-            websocketRef.current.send(
-                JSON.stringify({
-                    action: 'chat',
-                    messages: [...messagesRef.current, newMessage],
-                })
-            );
-            console.log('Sent action: chat with messages:', [
-                ...messagesRef.current,
-                newMessage,
-            ]);
+            if (wsConnectionStatus === 'connected') {
+                websocketRef.current.send(
+                    JSON.stringify({
+                        action: 'chat',
+                        messages: [...messagesRef.current, newMessage],
+                    })
+                );
+                console.log('Sent action: chat with messages:', [
+                    ...messagesRef.current,
+                    newMessage,
+                ]);
+            } else {
+                console.warn('Cannot send message: WebSocket is not connected.');
+            }
         } catch (error) {
             console.error('Error sending message:', error);
             setIsGenerating(false);
@@ -640,7 +703,7 @@ const ChatInterface = () => {
     };
 
     // -----------------------------
-    // React-Window Sizing
+    // React Window Size
     // -----------------------------
     const getItemSize = useCallback((index) => {
         return rowHeightsRef.current[index] || 100;
@@ -677,7 +740,7 @@ const ChatInterface = () => {
             <div className="flex-none bg-white/80 dark:bg-gray-800/80 shadow-sm p-4 backdrop-blur-md">
                 <div className="flex justify-between items-center max-w-6xl mx-auto">
                     <h1 className="text-xl font-semibold text-gray-800 dark:text-gray-100">
-                        {/* Title or Logo Here */}
+                        {/* Title if needed (or leave blank) */}
                     </h1>
                     <ControlButtons
                         wsConnectionStatus={wsConnectionStatus}

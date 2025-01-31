@@ -981,8 +981,8 @@ def listen_for_wake_words():
         raise ValueError("PORCUPINE_ACCESS_KEY not found in .env file.")
 
     # Paths to your two .ppn files
-    stop_there_path = "/home/jack/AI-chat---react-frontend-1/backend/picovoice_wakewords/stop-there_en_linux_v3_0_0/stop-there_en_linux_v3_0_0.ppn"
-    computer_path   = "/home/jack/AI-chat---react-frontend-1/backend/picovoice_wakewords/computer_en_linux_v3_0_0/computer_en_linux_v3_0_0.ppn"
+    stop_there_path = "picovoice_wakewords/stop-there_en_linux_v3_0_0/stop-there_en_linux_v3_0_0.ppn"
+    computer_path   = "picovoice_wakewords/computer_en_linux_v3_0_0/computer_en_linux_v3_0_0.ppn"
 
     porcupine = pvporcupine.create(
         access_key=access_key,
