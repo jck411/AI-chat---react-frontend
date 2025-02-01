@@ -17,22 +17,24 @@ const InlineCode = ({ children }) => {
         href={href}
         target="_blank"
         rel="noopener noreferrer"
-        className="text-blue-500 hover:text-blue-600 dark:text-blue-400 
-          dark:hover:text-blue-300 underline"
+        className="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 underline"
       >
         {children}
       </a>
     );
   }
-  return <code className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 rounded">{children}</code>;
+  return (
+    <code className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 rounded">
+      {children}
+    </code>
+  );
 };
 
 // Copy button component
 const CopyButton = ({ onClick, copied }) => (
   <button
     onClick={onClick}
-    className="text-xs px-2 py-1 rounded transition-colors
-      bg-gray-700 hover:bg-gray-600 text-white"
+    className="text-xs px-2 py-1 rounded transition-colors bg-gray-700 hover:bg-gray-600 text-white"
     aria-label="Copy code"
   >
     {copied ? '✓ Copied' : 'Copy'}
@@ -50,14 +52,13 @@ const CodeHeader = ({ language, onCopy, copied }) => (
 );
 
 // Main code block component
-const CodeBlock = ({ className, children }) => {
+const CodeBlock = ({ className, children, onUserInteraction }) => {
   const [copied, setCopied] = useState(false);
   const codeRef = useRef(null);
   const language = className?.replace('language-', '') || '';
 
   const handleCopy = async () => {
     if (!codeRef.current?.textContent) return;
-    
     try {
       await navigator.clipboard.writeText(codeRef.current.textContent);
       setCopied(true);
@@ -67,31 +68,46 @@ const CodeBlock = ({ className, children }) => {
     }
   };
 
+  // Stop the event from reaching outer scroll containers
+  const handleUserEvent = (e) => {
+    e.stopPropagation();
+    if (onUserInteraction) {
+      onUserInteraction();
+    }
+  };
+
   return (
-    <div className="border border-gray-400 dark:border-gray-600 rounded overflow-hidden">
+    <div className="border border-gray-400 dark:border-gray-600 rounded">
       <CodeHeader language={language} onCopy={handleCopy} copied={copied} />
-      <div ref={codeRef}>
-        <SyntaxHighlighter
-          language={language}
-          style={oneDark}
-          customStyle={{
-            margin: 0,
-            padding: '1rem',
-            backgroundColor: 'transparent',
-          }}
-          codeTagProps={{
-            style: {
-              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-              fontSize: '0.9rem',
-              lineHeight: '1.5',
-            },
-          }}
-          showLineNumbers={false}
-          wrapLines={true}
-          wrapLongLines={true}
-        >
-          {String(children).trim()}
-        </SyntaxHighlighter>
+      <div
+        className="overflow-auto max-h-[50vh] scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent"
+        onWheel={handleUserEvent}
+        onMouseDown={handleUserEvent}
+      >
+        <div ref={codeRef}>
+          <SyntaxHighlighter
+            language={language}
+            style={oneDark}
+            customStyle={{
+              margin: 0,
+              padding: '1rem',
+              backgroundColor: 'transparent',
+            }}
+            codeTagProps={{
+              style: {
+                fontFamily:
+                  'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                fontSize: '0.9rem',
+                lineHeight: '1.5',
+              },
+            }}
+            showLineNumbers={false}
+            wrapLines={true}
+            wrapLongLines={true}
+          >
+            {String(children).trim()}
+          </SyntaxHighlighter>
+        </div>
       </div>
     </div>
   );
