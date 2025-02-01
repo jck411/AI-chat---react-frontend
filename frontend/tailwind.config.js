@@ -10,36 +10,36 @@ module.exports = {
         DEFAULT: {
           css: {
             pre: {
-              margin: '0', // No margin outside the code block
-              padding: '0', // No padding inside the pre tag
-              border: '1px solid #d1d5db', // Single light border for the block
-              borderRadius: '0.375rem', // Smooth rounded corners
-              backgroundColor: '#f9fafb', // Light mode background
-              color: '#111827', // Text color in light mode
+              margin: 0,
+              padding: 0,
+              border: '1px solid #d1d5db',
+              borderRadius: '0.375rem',
+              backgroundColor: '#f9fafb',
+              color: '#111827',
             },
             code: {
-              color: 'inherit', // Inherit text color
-              backgroundColor: 'transparent', // No background behind the text
-              borderRadius: '0', // Remove any inline code rounding
-              padding: '0', // Remove inline code padding
+              color: 'inherit',
+              backgroundColor: 'transparent',
+              borderRadius: 0,
+              padding: 0,
             },
           },
         },
         invert: {
           css: {
             pre: {
-              margin: '0', // No margin outside the code block
-              padding: '0', // No padding inside the pre tag
-              border: '1px solid #4b5563', // Single dark border for the block
-              borderRadius: '0.375rem', // Smooth rounded corners
-              backgroundColor: '#1e1e1e', // Dark mode background
-              color: '#e5e7eb', // Text color in dark mode
+              margin: 0,
+              padding: 0,
+              border: '1px solid #4b5563',
+              borderRadius: '0.375rem',
+              backgroundColor: '#1e1e1e',
+              color: '#e5e7eb',
             },
             code: {
-              color: 'inherit', // Inherit text color
-              backgroundColor: 'transparent', // No background behind the text
-              borderRadius: '0', // Remove any inline code rounding
-              padding: '0', // Remove inline code padding
+              color: 'inherit',
+              backgroundColor: 'transparent',
+              borderRadius: 0,
+              padding: 0,
             },
           },
         },

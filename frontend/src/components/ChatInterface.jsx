@@ -46,7 +46,7 @@ const StopButton = ({ handleStop, isStoppingGeneration, actionFeedback }) => {
 };
 
 // --------------------------------------
-// MemoizedRow
+// MemoizedRow (with narrower content wrapper)
 // --------------------------------------
 const MemoizedRow = React.memo(
     ({ index, style, data }) => {
@@ -66,7 +66,11 @@ const MemoizedRow = React.memo(
 
         return (
             <div style={style}>
-                <div ref={rowRef} className="px-4 pt-2 pb-4">
+                {/* 
+                    Here's where we center and narrow the content with 
+                    mx-auto + max-w-2xl + px-4 (adjust as you like). 
+                */}
+                <div ref={rowRef} className="mx-auto max-w-5xl px-4 pt-2 pb-4">
                     <div
                         className={`flex ${
                             message.sender === 'user' ? 'justify-end' : 'justify-start'
@@ -110,9 +114,7 @@ const MemoizedRow = React.memo(
                                     {message.text}
                                 </ReactMarkdown>
                             ) : (
-                                <div className="whitespace-pre-wrap break-words">
-                                    {message.text}
-                                </div>
+                                <div className="whitespace-pre-wrap break-words">{message.text}</div>
                             )}
                             <div
                                 className={`text-xs mt-1 ${
@@ -354,12 +356,11 @@ const ChatInterface = () => {
     }, [darkMode]);
 
     // -----------------------------
-    // WebSocket: Single-connection (no reconnection logic)
+    // WebSocket: Single-connection
     // -----------------------------
     useEffect(() => {
         let isMounted = true;
 
-        // Establish WebSocket
         const ws = new WebSocket('ws://localhost:8000/ws/chat');
         websocketRef.current = ws;
         setWsConnectionStatus('connecting');
@@ -400,8 +401,8 @@ const ChatInterface = () => {
                     console.log(`Received GPT content: ${content}`);
                     setMessages((prev) => {
                         const lastIndex = prev.length - 1;
-                        // If the last message is assistant, append chunk
                         if (prev[lastIndex] && prev[lastIndex].sender === 'assistant') {
+                            // If the last message is from assistant, append to that text
                             return [
                                 ...prev.slice(0, lastIndex),
                                 {
@@ -410,7 +411,7 @@ const ChatInterface = () => {
                                 },
                             ];
                         } else {
-                            // Otherwise, create new assistant message
+                            // Otherwise, create a new assistant message
                             return [
                                 ...prev,
                                 {
@@ -539,12 +540,9 @@ const ChatInterface = () => {
     const toggleSTT = async () => {
         setIsTogglingSTT(true);
         try {
-            // If currently OFF, request to start
             if (!isSttOn && wsConnectionStatus === 'connected') {
                 websocketRef.current.send(JSON.stringify({ action: 'start-stt' }));
-            }
-            // Else if ON, request to pause
-            else if (isSttOn && wsConnectionStatus === 'connected') {
+            } else if (isSttOn && wsConnectionStatus === 'connected') {
                 websocketRef.current.send(JSON.stringify({ action: 'pause-stt' }));
             } else {
                 console.warn('Cannot toggle STT when WebSocket is not connected.');
@@ -562,7 +560,7 @@ const ChatInterface = () => {
     const handleKeyDown = (e) => {
         if (e.key === 'Enter') {
             if (e.shiftKey) {
-                // allow newline
+                // allow multiline
                 return;
             } else {
                 e.preventDefault();
@@ -659,7 +657,7 @@ const ChatInterface = () => {
         [messages.length]
     );
 
-    // Auto-scroll when new messages arrive, if we're at the bottom
+    // Auto-scroll when new messages arrive (if at bottom)
     useEffect(() => {
         if (atBottom && listRef.current) {
             listRef.current.scrollToItem(messages.length - 1, 'end');
@@ -674,27 +672,29 @@ const ChatInterface = () => {
             <PerformanceMonitor />
 
             {/* Top Bar */}
-            <div className="flex-none bg-white/80 dark:bg-gray-800/80 shadow-sm p-4 backdrop-blur-md">
-                <div className="flex justify-between items-center max-w-6xl mx-auto">
-                    <h1 className="text-xl font-semibold text-gray-800 dark:text-gray-100">
-                        {/* Title or Logo Here */}
-                    </h1>
-                    <ControlButtons
-                        wsConnectionStatus={wsConnectionStatus}
-                        handleClearChat={handleClearChat}
-                        isGenerating={isGenerating}
-                        handleStop={handleStop}
-                        isStoppingGeneration={isStoppingGeneration}
-                        actionFeedback={actionFeedback}
-                        toggleTTS={toggleTTS}
-                        isTogglingTTS={isTogglingTTS}
-                        ttsEnabled={ttsEnabled}
-                        toggleSTT={toggleSTT}
-                        isTogglingSTT={isTogglingSTT}
-                        isSttOn={isSttOn}
-                        darkMode={darkMode}
-                        setDarkMode={setDarkMode}
-                    />
+            <div className="flex-none bg-white/80 dark:bg-gray-800/80 shadow-sm backdrop-blur-md w-full">
+                <div className="max-w-6xl mx-auto px-4 py-4">
+                    <div className="flex justify-between items-center">
+                        <h1 className="text-xl font-semibold text-gray-800 dark:text-gray-100">
+                            {/* Title or Logo Here */}
+                        </h1>
+                        <ControlButtons
+                            wsConnectionStatus={wsConnectionStatus}
+                            handleClearChat={handleClearChat}
+                            isGenerating={isGenerating}
+                            handleStop={handleStop}
+                            isStoppingGeneration={isStoppingGeneration}
+                            actionFeedback={actionFeedback}
+                            toggleTTS={toggleTTS}
+                            isTogglingTTS={isTogglingTTS}
+                            ttsEnabled={ttsEnabled}
+                            toggleSTT={toggleSTT}
+                            isTogglingSTT={isTogglingSTT}
+                            isSttOn={isSttOn}
+                            darkMode={darkMode}
+                            setDarkMode={setDarkMode}
+                        />
+                    </div>
                 </div>
             </div>
 
@@ -705,33 +705,30 @@ const ChatInterface = () => {
                 </div>
             )}
 
-            {/* Messages Area */}
-            <div className="flex-1 overflow-hidden">
-                <div className="h-full scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent">
-                    <AutoSizer>
-                        {({ height, width }) => (
-                            <List
-                                ref={listRef}
-                                height={height}
-                                width={width}
-                                itemCount={messages.length}
-                                itemSize={getItemSize}
-                                itemData={{ messages, listRef, rowHeightsRef }}
-                                overscanCount={5}
-                                onItemsRendered={onItemsRendered}
-                                itemKey={(index) => messages[index].id}
-                                className="scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent"
-                            >
-                                {MemoizedRow}
-                            </List>
-                        )}
-                    </AutoSizer>
-                </div>
+            {/* Messages Area (scrollbar is pinned to window edge) */}
+            <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent">
+                <AutoSizer>
+                    {({ height, width }) => (
+                        <List
+                            ref={listRef}
+                            height={height}
+                            width={width}
+                            itemCount={messages.length}
+                            itemSize={getItemSize}
+                            itemData={{ messages, listRef, rowHeightsRef }}
+                            overscanCount={5}
+                            onItemsRendered={onItemsRendered}
+                            itemKey={(index) => messages[index].id}
+                        >
+                            {MemoizedRow}
+                        </List>
+                    )}
+                </AutoSizer>
             </div>
 
             {/* Input Area */}
-            <div className="flex-none bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
-                <div className="max-w-6xl mx-auto p-4">
+            <div className="flex-none bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 w-full">
+                <div className="max-w-6xl mx-auto px-4 py-4">
                     <div className="flex items-start gap-4">
                         <textarea
                             ref={textareaRef}
